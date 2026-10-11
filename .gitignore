@@ -1,0 +1,19 @@
+# Xcode build output and per-user state
+build/
+build-device/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+
+# macOS
+.DS_Store
+
+# Supabase CLI and secrets
+supabase/.temp/
+supabase/.branches/
+.env
+.env.*
+
+# Python
+__pycache__/
+*.pyc

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>APP_STORE_URL</key>
+	<string></string>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.ethantraister.FoCoSocial.refresh</string>
+	</array>
+	<key>FOCO_DEMO_SERVER</key>
+	<string></string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	<key>REVIEW_NETID</key>
+	<string>focoreview</string>
+	<key>SUPABASE_ANON_KEY</key>
+	<string>eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5mdnp6eG5xbm9nbWhtaWx1c3pnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE2MjgwODUsImV4cCI6MjEwNzIwNDA4NX0.Bh9LW6YBbjg46CVS85Z8DdVG3dSOJZHBTdNXTS1kPDI</string>
+	<key>SUPABASE_URL</key>
+	<string>https://nfvzzxnqnogmhmiluszg.supabase.co</string>
+	<key>SUPPORT_EMAIL</key>
+	<string>focosocial.app@gmail.com</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+	</array>
+</dict>
+</plist>
