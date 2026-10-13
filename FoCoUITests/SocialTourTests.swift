@@ -20,10 +20,29 @@ final class SocialTourTests: XCTestCase {
         app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", prefix)).firstMatch
     }
 
+    private func text(containing part: String) -> XCUIElement {
+        app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", part)).firstMatch
+    }
+
+    /// The app's own bottom bar (Menu, Chats, the big Together button, Alerts, Me).
+    private func tab(_ name: String) {
+        let item = app.buttons["tab.\(name)"]
+        XCTAssertTrue(item.waitForExistence(timeout: 5), "\(name) tab")
+        item.tap()
+    }
+
+    private func back() {
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        sleep(1)
+    }
+
     /// Small drags until the element sits between the top bar and the tab bar (a swipe on a half-hidden row misses).
     private func scrollIntoView(_ element: XCUIElement) {
         let top = app.navigationBars.firstMatch.frame.maxY + 10
-        let bottom = app.tabBars.firstMatch.frame.minY - 10
+        let bar = app.otherElements["tabBar"]
+        let bottom = (bar.exists ? bar.frame.minY : app.frame.maxY) - 10
+        // Rows off screen don't exist yet in a list: scroll down until it shows up.
+        for _ in 0..<6 where !element.exists { app.swipeUp(); sleep(1) }
         for _ in 0..<8 {
             let frame = element.frame
             if frame.minY >= top && frame.maxY <= bottom { return }
@@ -40,13 +59,31 @@ final class SocialTourTests: XCTestCase {
         }
     }
 
+    /// A time FoCo is closed gets a popup instead of going through. Returns true if that happened (and dismisses it).
+    private func closedPopupShown() -> Bool {
+        let alert = app.alerts.matching(NSPredicate(format: "label BEGINSWITH 'FoCo is closed'")).firstMatch
+        guard alert.waitForExistence(timeout: 2) else { return false }
+        snap("foco-closed")
+        alert.buttons["OK"].tap()
+        return true
+    }
+
+    private func send(_ message: String) {
+        let field = app.textFields["Message"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5), "chat has a message box")
+        field.tap()
+        field.typeText(message)
+        app.buttons["sendMessage"].tap()
+        XCTAssertTrue(text(containing: message).waitForExistence(timeout: 5), "sent message shows in the chat")
+    }
+
     func testSocialTour() {
         app.launchArguments = ["-resetForUITests", "-onboarded", "<true/>", "-useLocalServer", "YES"]
         app.launch()
 
-        app.tabBars.buttons["Together"].tap()
         let email = app.textFields["NetID"]
-        XCTAssertTrue(email.waitForExistence(timeout: 5))
+        XCTAssertTrue(email.waitForExistence(timeout: 5), "the app opens on Together")
+        XCTAssertFalse(app.buttons["tab.Feed"].exists, "there's no feed")
         snap("signin")
         email.tap()
         email.typeText("uitest.\(Int.random(in: 1000...99999))")
@@ -76,48 +113,92 @@ final class SocialTourTests: XCTestCase {
         sleep(3)
         snap("together")
 
-        let going = app.buttons["Going"].firstMatch
-        if going.waitForExistence(timeout: 3) {
-            going.tap()
-            sleep(2)
-            snap("invite-accepted")
-        }
+        // Being added to a group is an invite you accept.
+        let join = app.buttons["Join"].firstMatch
+        XCTAssertTrue(join.waitForExistence(timeout: 5), "a group invite waits on Together")
+        XCTAssertTrue(text(containing: "invited you").exists, "and says who invited you")
+        snap("group-invite")
+        join.tap()
+        sleep(2)
+        XCTAssertFalse(app.buttons["Join"].exists, "joined")
+
+        // Answer an invite, then tap the same answer to take it back.
+        let invite = app.cells.containing(NSPredicate(format: "label CONTAINS 'Post-launch-review dinner'")).firstMatch
+        XCTAssertTrue(invite.waitForExistence(timeout: 5), "a meal invite waits on Together")
+        invite.buttons["Going"].tap()
+        sleep(2)
+        snap("invite-accepted")
+        XCTAssertFalse(app.staticTexts["Invites for you"].exists, "answered invites leave Invites for you")
+        scrollIntoView(invite)
+        invite.buttons["Going"].tap()
+        sleep(2)
+        for _ in 0..<4 { app.swipeDown() }
+        XCTAssertTrue(app.staticTexts["Invites for you"].waitForExistence(timeout: 5), "tapping Going again takes it back")
+        XCTAssertTrue(invite.exists, "the plan is back with your invites")
+        snap("rsvp-taken-back")
+        invite.buttons["Going"].tap()
+        sleep(2)
+
+        // A plan's page: who's coming (from different friend groups) and the plan's chat.
+        scrollIntoView(invite)
+        button("Dinner with Priya").tap()
+        XCTAssertTrue(app.navigationBars["Dinner"].waitForExistence(timeout: 5), "tapping a plan opens it")
+        XCTAssertTrue(text(containing: "Going (").exists, "lists who's going")
+        snap("plan-detail")
+        app.buttons["Plan chat"].tap()
+        XCTAssertTrue(text(containing: "grab a table upstairs").waitForExistence(timeout: 5), "the plan chat has the others' messages")
+        XCTAssertFalse(app.otherElements["tabBar"].exists, "the chat takes the whole screen")
+        send("Running 5 min late")
+        snap("plan-chat")
+        back()
+        back()
 
         let meToo = app.buttons["Me too"].firstMatch
-        if !meToo.exists { app.swipeUp() }
+        for _ in 0..<4 { app.swipeDown() }
+        scrollIntoView(meToo)
         XCTAssertTrue(meToo.waitForExistence(timeout: 5), "friend heading to FoCo shows Me too")
         snap("heading-friends")
         meToo.tap()
         sleep(2)
         XCTAssertTrue(app.staticTexts["You're heading over"].waitForExistence(timeout: 5))
         snap("heading-me-too")
-        app.swipeDown()
+        for _ in 0..<3 { app.swipeDown() }
         button("Change time").tap()
         sleep(1)
+        XCTAssertTrue(app.buttons["Custom"].exists, "15 min, 30 min, 1 hour, or a time you pick")
         app.buttons["15 min"].tap()
+        app.buttons["Dark side"].tap()
+        let loud = app.switches["Notify friends"]
+        XCTAssertTrue(loud.exists, "out loud or quiet")
+        if (loud.value as? String) != "1" { loud.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap() }
+        XCTAssertTrue(app.buttons["Tell friends"].waitForExistence(timeout: 2), "out loud says Tell friends")
         snap("heading-sheet")
         app.buttons["Tell friends"].tap()
+        if closedPopupShown() { app.buttons["Cancel"].tap() }
         sleep(2)
 
-        XCTAssertFalse(button("I'm at FoCo").exists, "checking in isn't a main button")
         let byHand = app.buttons["Check in manually"]
         for _ in 0..<3 where !byHand.isHittable { app.swipeUp() }
         byHand.tap()
-        sleep(1)
-        app.buttons["Dark side"].tap()
-        snap("checkin-sheet")
-        app.buttons["Check in"].tap()
-        sleep(2)
-        snap("checked-in")
-        app.buttons["Upstairs"].firstMatch.tap()
-        sleep(2)
-        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH 'Upstairs'")).firstMatch.waitForExistence(timeout: 5))
-        snap("moved-upstairs")
-        app.swipeDown()
+        if !closedPopupShown() {
+            sleep(1)
+            app.buttons["Dark side"].tap()
+            snap("checkin-sheet")
+            app.buttons["Check in"].tap()
+            sleep(2)
+            snap("checked-in")
+            app.buttons["Upstairs"].firstMatch.tap()
+            sleep(2)
+            XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH 'Upstairs'")).firstMatch.waitForExistence(timeout: 5))
+            snap("moved-upstairs")
+        }
+        for _ in 0..<3 { app.swipeDown() }
         sleep(1)
 
         button("Plan a meal").tap()
         sleep(1)
+        button("Tomorrow").tap()
+        XCTAssertTrue(app.staticTexts["Meal: Dinner"].waitForExistence(timeout: 3), "the meal follows from the time")
         button("Just people I pick").tap()
         button("Maya R.").tap()
         let note = app.textFields.matching(NSPredicate(format: "placeholderValue BEGINSWITH 'Note'")).firstMatch
@@ -133,6 +214,7 @@ final class SocialTourTests: XCTestCase {
         let mine = app.cells.containing(NSPredicate(format: "label BEGINSWITH 'Your '")).firstMatch
         for _ in 0..<3 where !mine.exists { app.swipeUp() }
         if mine.exists {
+            scrollIntoView(mine)
             mine.swipeLeft()
             app.buttons["Cancel plan"].tap()
             XCTAssertTrue(app.staticTexts["Plan cancelled"].waitForExistence(timeout: 5), "undo bar appears")
@@ -149,14 +231,21 @@ final class SocialTourTests: XCTestCase {
         app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Friends'")).firstMatch.tap()
         sleep(2)
         snap("friends")
-        if app.buttons["Accept"].firstMatch.exists {
-            app.buttons["Accept"].firstMatch.tap()
-            sleep(2)
-            snap("friend-accepted")
-        }
-        let invite = button("Invite friends by text")
-        XCTAssertTrue(invite.waitForExistence(timeout: 3), "invite friends by text from Friends")
-        invite.tap()
+        let accept = button("Accept")
+        XCTAssertTrue(accept.waitForExistence(timeout: 3), "friend request with Accept")
+        XCTAssertTrue(button("Decline").exists, "and Decline next to it")
+        XCTAssertEqual(accept.frame.midY, button("Decline").frame.midY, accuracy: 2, "side by side, under the name")
+        accept.tap()
+        sleep(2)
+        snap("friend-accepted")
+        let star = app.buttons["Make Maya a close friend"]
+        XCTAssertTrue(star.waitForExistence(timeout: 3), "a star makes someone a close friend")
+        star.tap()
+        XCTAssertTrue(app.buttons["Maya is a close friend"].waitForExistence(timeout: 3))
+        snap("close-friend")
+        let inviteText = button("Invite friends by text")
+        XCTAssertTrue(inviteText.waitForExistence(timeout: 3), "invite friends by text from Friends")
+        inviteText.tap()
         sleep(3)
         snap("invite-by-text")   // the simulator can't send texts, so this is the share sheet with the same message
         let close = app.buttons["Close"]
@@ -164,21 +253,30 @@ final class SocialTourTests: XCTestCase {
         sleep(1)
         app.buttons["Done"].tap()
 
-        app.tabBars.buttons["Feed"].tap()
-        sleep(4)
-        snap("feed-plates")
-        let vote = button("Upvote")
-        if vote.waitForExistence(timeout: 3) {
-            vote.tap()
-            sleep(1)
-            snap("feed-voted")
-        }
-        XCTAssertFalse(app.buttons["Ideas"].exists, "feed is plates only")
-        XCTAssertFalse(app.buttons["Complaints"].exists, "feed is plates only")
+        // Chats: messages from friends, group chats, and plan chats.
+        tab("Chats")
+        let maya = button("Maya R.")
+        XCTAssertTrue(maya.waitForExistence(timeout: 6), "Maya's message is in Chats")
+        XCTAssertTrue(button("Water Polo").exists, "and the group chat")
+        snap("chats")
+        maya.tap()
+        XCTAssertTrue(text(containing: "want to get dinner").waitForExistence(timeout: 5))
+        send("yes! 6:30?")
+        snap("dm")
+        back()
+        app.buttons["New message"].tap()
+        button("Jordan").tap()
+        XCTAssertTrue(text(containing: "No messages yet").waitForExistence(timeout: 5), "a new conversation")
+        back()
 
-        app.tabBars.buttons["Me"].tap()
+        tab("Me")
         sleep(1)
         snap("me")
+        app.buttons["Notifications"].tap()
+        XCTAssertTrue(text(containing: "Friends going soon").waitForExistence(timeout: 5), "notification settings")
+        XCTAssertTrue(app.switches["Messages"].exists)
+        snap("notification-settings")
+        back()
         app.buttons["Edit"].tap()
         XCTAssertTrue(app.buttons["Add photo"].waitForExistence(timeout: 3), "no photo yet: initials, and a way to add one")
         snap("edit-profile")
@@ -228,7 +326,9 @@ final class SocialTourTests: XCTestCase {
         snap("auto-left")
     }
 
-    /// Plan days ahead, build a club group with someone who isn't a friend, and send a food request.
+
+    /// Plan days ahead (and get turned away at a closed time), build a club group with someone who isn't a friend,
+    /// chat in it, and send a food request.
     func testPlanAheadGroupsAndRequests() {
         signUp()
 
@@ -242,8 +342,23 @@ final class SocialTourTests: XCTestCase {
         button("Plan a meal").tap()
         sleep(1)
         button(weekday).tap()
-        app.buttons["Dinner"].tap()
-        XCTAssertFalse(app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH 'On the menu'")).firstMatch.exists, "no menu in the composer")
+        XCTAssertTrue(app.staticTexts["Meal: Dinner"].waitForExistence(timeout: 3), "6 PM is dinner, picked for you")
+        XCTAssertFalse(app.segmentedControls.firstMatch.exists, "no meal picker to get wrong")
+        // 9 PM: between dinner and Late Night, FoCo is closed.
+        app.datePickers.firstMatch.tap()
+        let hour = app.pickerWheels.element(boundBy: 0)
+        if hour.waitForExistence(timeout: 3) {
+            hour.adjust(toPickerWheelValue: "9")
+            app.navigationBars.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            XCTAssertTrue(app.staticTexts["FoCo is closed then"].waitForExistence(timeout: 3), "a closed time says so")
+            app.buttons["Post"].tap()
+            XCTAssertTrue(closedPopupShown(), "and Post explains it in a popup")
+            app.datePickers.firstMatch.tap()
+            hour.adjust(toPickerWheelValue: "6")
+            app.navigationBars.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        } else {
+            XCTFail("time wheel")
+        }
         snap("plan-ahead")
         app.buttons["Post"].tap()
         sleep(2)
@@ -251,6 +366,19 @@ final class SocialTourTests: XCTestCase {
         for _ in 0..<4 where !planned.exists { app.swipeUp() }
         XCTAssertTrue(planned.exists, "plan \(weekday) shows up")
         snap("plan-ahead-listed")
+
+        // The host can change it later.
+        button("Your dinner").tap()
+        XCTAssertTrue(app.buttons["Change time or note"].waitForExistence(timeout: 5), "the host can edit a plan")
+        app.buttons["Change time or note"].tap()
+        XCTAssertTrue(app.navigationBars["Edit plan"].waitForExistence(timeout: 3))
+        let note = app.textFields.matching(NSPredicate(format: "placeholderValue BEGINSWITH 'Note'")).firstMatch
+        note.tap()
+        note.typeText("Upstairs")
+        snap("edit-plan")
+        app.buttons["Save"].tap()
+        XCTAssertTrue(text(containing: "Upstairs").waitForExistence(timeout: 5), "the change shows")
+        back()
 
         // Swiping away someone else's plan hides it (and RSVPs "can't make it").
         let teamDinner = app.cells.containing(NSPredicate(format: "label CONTAINS 'Team dinner after practice'")).firstMatch
@@ -273,6 +401,7 @@ final class SocialTourTests: XCTestCase {
         name.tap()
         name.typeText("Ultimate")
         XCTAssertTrue(app.buttons["Add photo"].exists, "a group can have a photo; until then, its initials")
+        XCTAssertTrue(app.staticTexts["Your friends, most recent first"].exists, "friends are there to add without searching")
         let search = app.textFields["Search by name"]
         search.tap()
         search.typeText("Theo")
@@ -285,8 +414,12 @@ final class SocialTourTests: XCTestCase {
         app.buttons.containing(NSPredicate(format: "label CONTAINS 'Ultimate'")).firstMatch.tap()
         sleep(2)
         let addFriend = app.buttons["Add Theo as a friend"]
-        XCTAssertTrue(addFriend.waitForExistence(timeout: 5), "non-friend teammate has Add friend")
+        XCTAssertTrue(addFriend.waitForExistence(timeout: 5), "Theo accepted the invite, and as a non-friend has Add friend")
         XCTAssertTrue(app.buttons["Delete group"].exists, "the creator owns the group")
+        app.buttons["Group chat"].tap()
+        send("Practice ends at 6, dinner after?")
+        snap("group-chat")
+        back()
         XCTAssertTrue(app.buttons["Add photo"].exists, "and can give it a photo")
         app.buttons["Add photo"].tap()
         XCTAssertTrue(app.staticTexts["Add group photo"].waitForExistence(timeout: 3), "the options sheet is about the group")
@@ -314,11 +447,10 @@ final class SocialTourTests: XCTestCase {
         XCTAssertTrue(app.buttons["Leave group"].waitForExistence(timeout: 5), "after handing it off you're a regular member")
         XCTAssertFalse(app.buttons["Delete group"].exists)
         snap("group-transferred")
-        app.navigationBars.buttons.firstMatch.tap()
-        sleep(1)
+        back()
         app.buttons["Done"].tap()
 
-        app.tabBars.buttons["Me"].tap()
+        tab("Me")
         app.buttons["Food requests"].tap()
         let food = app.textFields["Food you want at FoCo"]
         XCTAssertTrue(food.waitForExistence(timeout: 5))
@@ -333,7 +465,7 @@ final class SocialTourTests: XCTestCase {
     private func signUp(_ extraArgs: [String] = [], netID: String = "audit.\(Int.random(in: 1000...99999))") {
         app.launchArguments = ["-resetForUITests", "-onboarded", "<true/>", "-useLocalServer", "YES"] + extraArgs
         app.launch()
-        app.tabBars.buttons["Together"].tap()
+        tab("Together")
         let email = app.textFields["NetID"]
         XCTAssertTrue(email.waitForExistence(timeout: 5))
         email.tap()
@@ -358,11 +490,11 @@ final class SocialTourTests: XCTestCase {
     }
 
     /// The flows App Review and a public release depend on: the review account's password sign-in, reporting and
-    /// blocking (and unblocking), asking Dining for a dish, changing the profile photo, and deleting the account.
+    /// blocking (and unblocking) in chats, asking Dining for a dish, changing the profile photo, and deleting the account.
     func testReleaseFlows() {
         app.launchArguments = ["-resetForUITests", "-onboarded", "<true/>", "-useLocalServer", "YES"]
         app.launch()
-        app.tabBars.buttons["Together"].tap()
+        tab("Together")
         let netID = app.textFields["NetID"]
         XCTAssertTrue(netID.waitForExistence(timeout: 5))
         netID.tap()
@@ -387,45 +519,52 @@ final class SocialTourTests: XCTestCase {
         allowAlerts()
         sleep(2)
 
-        // Reporting hides the post for you right away.
-        app.tabBars.buttons["Feed"].tap()
-        let steak = app.staticTexts["Pepper steak + brown rice from A9. Underrated."]
-        XCTAssertTrue(steak.waitForExistence(timeout: 6))
-        app.buttons["More options"].firstMatch.tap()
-        app.buttons["Report post"].tap()
-        app.buttons["Spam"].tap()
-        XCTAssertTrue(app.staticTexts["Thanks. You won't see that post again."].waitForExistence(timeout: 3),
-                      "a note confirms the report (it used to vanish at once if another tab had shown a note)")
-        XCTAssertFalse(steak.exists, "reported post is gone for the reporter")
+        // Reporting a message hides it for you right away.
+        tab("Chats")
+        button("Maya R.").tap()
+        let hey = text(containing: "want to get dinner")
+        XCTAssertTrue(hey.waitForExistence(timeout: 6))
+        hey.press(forDuration: 1.2)
+        app.buttons["Report"].tap()
+        XCTAssertTrue(app.staticTexts["Thanks for reporting it. You won't see that message again."].waitForExistence(timeout: 3))
+        XCTAssertFalse(hey.exists, "reported message is gone for the reporter")
         snap("reported")
+        back()
 
-        // Block someone from their post, then unblock them from Me → Blocked people.
-        let more = app.buttons["More options"].firstMatch
-        XCTAssertTrue(more.waitForExistence(timeout: 3))
-        more.tap()
+        // Block someone from their message in a group chat, then unblock them from Me → About → Blocked people.
+        button("Water Polo").tap()
+        let theo = text(containing: "Saving the big table")
+        XCTAssertTrue(theo.waitForExistence(timeout: 6))
+        theo.press(forDuration: 1.2)
         let block = button("Block ")
         XCTAssertTrue(block.waitForExistence(timeout: 3))
-        let blockedName = String(block.label.dropFirst("Block ".count))
+        let blocked = String(block.label.dropFirst("Block ".count))
         block.tap()
         app.buttons["Block"].tap()
         sleep(2)
-        XCTAssertFalse(app.staticTexts[blockedName].exists, "their posts are gone")
-        app.tabBars.buttons["Me"].tap()
-        app.buttons["About"].tap()
+        XCTAssertFalse(theo.exists, "their messages are gone")
+        snap("blocked-in-chat")
+        back()
+        tab("Me")
+        for _ in 0..<3 { app.swipeUp() }
+        sleep(1)
+        let about = app.buttons["About"]
+        XCTAssertTrue(about.waitForExistence(timeout: 3))
+        XCTAssertLessThanOrEqual(about.frame.maxY, app.otherElements["tabBar"].frame.minY + 1, "the last rows scroll clear of the bottom bar")
+        snap("me-bottom")
+        about.tap()
         XCTAssertTrue(app.buttons["Community rules"].waitForExistence(timeout: 3), "About has the rules")
         XCTAssertTrue(app.buttons["Privacy"].exists, "and the privacy policy")
         XCTAssertTrue(app.descendants(matching: .any)["Contact us"].exists, "and a way to reach us")
         snap("about")
         app.buttons["Blocked people"].tap()
-        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH %@", blockedName)).firstMatch.waitForExistence(timeout: 5),
+        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label BEGINSWITH %@", blocked)).firstMatch.waitForExistence(timeout: 5),
                       "blocked people are listed")
         snap("blocked-people")
         app.buttons["Unblock"].firstMatch.tap()
         XCTAssertTrue(app.staticTexts["You haven't blocked anyone."].waitForExistence(timeout: 5), "and can be unblocked")
-        app.navigationBars.buttons.firstMatch.tap()   // back to About
-        sleep(1)
-        app.navigationBars.buttons.firstMatch.tap()   // back to Me
-        sleep(1)
+        back()   // About
+        back()   // Me
 
         // A new profile photo replaces the old one.
         app.buttons["Edit"].tap()
@@ -452,7 +591,7 @@ final class SocialTourTests: XCTestCase {
         sleep(1)
 
         // Ask Dining for a dish straight from its page.
-        app.tabBars.buttons["Menu"].tap()
+        tab("Menu")
         let dish = app.buttons.containing(NSPredicate(format: "label CONTAINS ' station'")).firstMatch
         if dish.waitForExistence(timeout: 8) {
             dish.tap()
@@ -461,11 +600,11 @@ final class SocialTourTests: XCTestCase {
             ask.tap()
             XCTAssertTrue(button("Sent to Dining").waitForExistence(timeout: 5), "the request actually goes to Dining")
             snap("dish-requested")
-            app.navigationBars.buttons.element(boundBy: 0).tap()
+            back()
         }
 
         // Deleting the account signs you out (and removes your photos; the test script checks the folder).
-        app.tabBars.buttons["Me"].tap()
+        tab("Me")
         let delete = app.buttons["Delete my account"]
         for _ in 0..<3 where !delete.isHittable { app.swipeUp() }
         app.buttons["Sign out"].tap()
@@ -491,7 +630,7 @@ final class SocialTourTests: XCTestCase {
         app.terminate()
         app.launchArguments = ["-onboarded", "<true/>", "-useLocalServer", "YES"]   // same phone and session, no reset
         app.launch()
-        app.tabBars.buttons["Together"].tap()
+        tab("Together")
         XCTAssertTrue(button("Going soon").waitForExistence(timeout: 8), "opens to Together with no connection")
         XCTAssertFalse(app.textFields["NetID"].exists, "still signed in")
         XCTAssertFalse(app.navigationBars["Set up your profile"].exists, "no profile setup screen")
@@ -500,11 +639,11 @@ final class SocialTourTests: XCTestCase {
         XCTAssertTrue(offline.waitForExistence(timeout: 10), "says it's offline instead of spinning")
         XCTAssertTrue(app.staticTexts["Invites for you"].exists, "and shows the plans it last loaded")
         snap("offline-together")
-        app.tabBars.buttons["Me"].tap()
+        tab("Me")
         XCTAssertTrue(app.buttons["Edit"].waitForExistence(timeout: 3), "your profile is there offline")
         snap("offline-me")
         sleep(18)   // the connection comes back
-        app.tabBars.buttons["Together"].tap()
+        tab("Together")
         app.swipeDown()
         sleep(3)
         XCTAssertFalse(app.textFields["NetID"].exists, "still signed in once it's back")
@@ -523,15 +662,15 @@ final class SocialTourTests: XCTestCase {
 
     func testSocialAccessibilityAndMenuLine() throws {
         signUp(["-meal", "dinner"])
-        for tab in ["Together", "Feed", "Me"] {
-            app.tabBars.buttons[tab].tap()
+        for name in ["Together", "Chats", "Me"] {
+            tab(name)
             sleep(3)
             try app.performAccessibilityAudit(for: [.contrast, .elementDetection, .hitRegion, .sufficientElementDescription, .trait]) { issue in
-                print("A11Y[\(tab)] \(issue.auditType.rawValue) — \(issue.compactDescription) — \(issue.element?.label ?? "?")")
+                print("A11Y[\(name)] \(issue.auditType.rawValue) — \(issue.compactDescription) — \(issue.element?.label ?? "?")")
                 return true
             }
         }
-        app.tabBars.buttons["Menu"].tap()
+        tab("Menu")
         sleep(3)
         snap("menu-friends-line")
         let line = button("Jordan")
@@ -543,52 +682,23 @@ final class SocialTourTests: XCTestCase {
         defer { XCUIDevice.shared.appearance = .light }
         signUp()
         snap("dark-together")
-        app.tabBars.buttons["Feed"].tap()
-        sleep(4)
-        snap("dark-feed")
-
-        button("New post").tap()
+        button("Going soon").tap()
         sleep(1)
-        let plate = "Test plate \(Int.random(in: 1000...9999))"
-        button("Choose photo").tap()
+        snap("dark-going-soon")
+        app.buttons["Cancel"].tap()
+        sleep(1)
+        tab("Chats")
         sleep(3)
-        snap("photo-picker")
-        do {
-            app.coordinate(withNormalizedOffset: CGVector(dx: 0.16, dy: 0.43)).tap()
-            sleep(3)
-            let caption = app.textFields.matching(NSPredicate(format: "placeholderValue BEGINSWITH 'Caption'")).firstMatch
-            if caption.waitForExistence(timeout: 3) {
-                sleep(2)
-                caption.tap()
-                sleep(1)
-                caption.typeText(plate)
-            }
-            snap("photo-composer")
-            app.navigationBars.buttons["Post"].tap()
-            sleep(4)
-            app.buttons["Newest"].tap()
-            sleep(3)
-            snap("photo-posted")
-            XCTAssertTrue(app.staticTexts[plate].waitForExistence(timeout: 5), "posted photo shows in feed")
-
-            let more = app.buttons["More options"].firstMatch
-            XCTAssertTrue(more.waitForExistence(timeout: 3), "post has a ••• button")
-            more.tap()
-            sleep(1)
-            snap("post-menu")
-            let delete = app.buttons["Delete post"]
-            XCTAssertTrue(delete.waitForExistence(timeout: 3), "••• opens with Delete post")
-            delete.tap()
-            let confirm = app.buttons["Delete"]
-            XCTAssertTrue(confirm.waitForExistence(timeout: 3), "Delete post asks once")
-            snap("delete-confirm")
-            confirm.tap()
-            sleep(3)
-            snap("post-deleted")
-            XCTAssertFalse(app.staticTexts[plate].exists, "deleted post is gone")
-            app.swipeDown()   // pull to refresh: it shouldn't come back
-            sleep(3)
-            XCTAssertFalse(app.staticTexts[plate].exists, "deleted post stays gone after refresh")
-        }
+        snap("dark-chats")
+        button("Water Polo").tap()
+        sleep(3)
+        snap("dark-group-chat")
+        back()
+        tab("Menu")
+        sleep(4)
+        snap("dark-menu")
+        app.swipeUp()
+        sleep(1)
+        snap("dark-menu-stations")
     }
 }

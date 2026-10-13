@@ -106,9 +106,23 @@ enum FoodClassifier {
         return s.trimmingCharacters(in: .whitespaces)
     }
 
+    /// Desserts get their own section, since they change every day and people care about them.
+    private static let dessertWords = #"\b(cakes?|cupcakes?|cheesecake|cookies?|brownies?|blondies?|pies?|pudding|cobbler|crisp|crumble|tarts?|mousse|ice cream|gelato|sundaes?|soft serve|donuts?|doughnuts?|cannoli|eclairs?|macarons?|cream puffs?|tiramisu|baklava|churros?|fudge|whoopie|s'mores|rice krispie|parfait)\b"#
+    /// "Lemon Bar" is a dessert; "Salad Bar" isn't, so bars only count from the bakery.
+    private static let bakeryBars = #"\bbars?\b"#
+
+    static func isDessert(name: String, station: String) -> Bool {
+        let n = name.lowercased()
+        if ["pie crust", "pot pie", "shepherd", "yogurt parfait", "crab cake", "fish cake", "rice cake"].contains(where: n.contains) { return false }
+        if n.range(of: dessertWords, options: .regularExpression) != nil { return true }
+        return station.lowercased() == "bakery" && n.range(of: bakeryBars, options: .regularExpression) != nil
+    }
+
     static func isMain(name: String, station: String, calories: Double?, protein: Double?) -> Bool {
         if nonMainStations.contains(station.lowercased()) { return false }
         let n = name.lowercased()
+        // Pizza is there every day, so it isn't a headline (it's still under its station's "More").
+        if n.contains("pizza") { return false }
         let entree = n.range(of: entreeWords, options: .regularExpression) != nil
         let side = n.range(of: sideWords, options: .regularExpression) != nil
         if n.range(of: alwaysSide, options: .regularExpression) != nil { return false }

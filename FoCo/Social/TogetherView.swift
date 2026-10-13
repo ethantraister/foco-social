@@ -2,12 +2,14 @@ import SwiftUI
 
 struct TogetherView: View {
     @Environment(SocialStore.self) private var social
+    @State private var router = AppRouter.shared
     @State private var showPlan = false
     @State private var showCheckIn = false
     @State private var showHeading = false
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var showFriends = false
-    @State private var planFor: Plan?
+    @State private var openPlan: UUID?
+    @State private var closedAlert: Date?
 
     var body: some View {
         NavigationStack {
@@ -20,10 +22,11 @@ struct TogetherView: View {
                     Section { OfflineNote() }
                 }
 
-                if !social.invites.isEmpty {
+                if !social.invites.isEmpty || !social.groupInvites.isEmpty {
                     Section("Invites for you") {
+                        ForEach(social.groupInvites) { GroupInviteRow(group: $0) }
                         ForEach(social.invites) { plan in
-                            PlanCard(plan: plan, prominent: true)
+                            PlanCard(plan: plan, prominent: true) { openPlan = plan.id }
                         }
                     }
                 }
@@ -62,7 +65,9 @@ struct TogetherView: View {
                     }
                     // Without automatic check-in (off, or no location access), the only way to show up here.
                     if social.myCheckin == nil && !PresenceMonitor.shared.isWorking {
-                        Button { showCheckIn = true } label: {
+                        Button {
+                            if FoCoHours.isOpen(at: .now) { showCheckIn = true } else { closedAlert = .now }
+                        } label: {
                             Label("Check in manually", systemImage: "hand.tap")
                         }
                     }
@@ -92,7 +97,7 @@ struct TogetherView: View {
                         }
                     } else {
                         ForEach(social.upcoming) { plan in
-                            PlanCard(plan: plan, prominent: false)
+                            PlanCard(plan: plan, prominent: false) { openPlan = plan.id }
                                 .swipeActions {
                                     if plan.host.id == social.myId {
                                         Button("Cancel plan", role: .destructive) { Task { await social.cancel(plan) } }
@@ -107,11 +112,12 @@ struct TogetherView: View {
                 } header: {
                     Text("Coming up")
                 } footer: {
-                    Text("Swipe left to remove a plan. Only friends can see your plans and check-ins.")
+                    Text("Tap a plan to see who's coming and to chat. Swipe left to remove one.")
                 }
 
                 Section {
                     AutoCheckinSetting()
+                    ShareWithSetting()
                 } footer: {
                     Text("During meals, friends see you're at FoCo when you walk in, and you're checked out when you leave.")
                 }
@@ -139,8 +145,10 @@ struct TogetherView: View {
                     .accessibilityLabel(social.incoming.isEmpty ? "Friends" : "Friends, \(social.incoming.count) new requests")
                 }
             }
+            .navigationDestination(item: $openPlan) { PlanDetailView(planId: $0) }
             .refreshable { await social.refreshAll() }
             .task {
+                await Push.registerIfAllowed(ask: true)
                 // Who's here refreshes every 30 s. During a meal, automatic check-in also takes a location reading then,
                 // since iOS can take minutes to report walking in while the app is open.
                 while !Task.isCancelled {
@@ -149,11 +157,16 @@ struct TogetherView: View {
                     try? await Task.sleep(for: .seconds(30))
                 }
             }
+            .onChange(of: router.pendingPlan, initial: true) {
+                guard let plan = router.pendingPlan else { return }
+                router.pendingPlan = nil
+                openPlan = plan
+            }
             .sheet(isPresented: $showPlan) { PlanComposer() }
             .sheet(isPresented: $showCheckIn) { CheckInSheet() }
             .sheet(isPresented: $showHeading) { HeadingSheet() }
             .sheet(isPresented: $showFriends) { FriendsView() }
-            .toastHost()
+            .closedAlert($closedAlert)
         }
     }
 }
@@ -195,6 +208,19 @@ struct OfflineNote: View {
     }
 }
 
+extension View {
+    /// "FoCo is closed at 9:00 PM", for when you pick a time FoCo isn't open.
+    func closedAlert(_ time: Binding<Date?>) -> some View {
+        alert(time.wrappedValue.map(FoCoHours.closedTitle) ?? "FoCo is closed",
+              isPresented: Binding(get: { time.wrappedValue != nil }, set: { if !$0 { time.wrappedValue = nil } }),
+              presenting: time.wrappedValue) { _ in
+            Button("OK", role: .cancel) {}
+        } message: { date in
+            Text(FoCoHours.closedMessage(at: date))
+        }
+    }
+}
+
 /// For someone with no friends on the app yet: the first thing to do.
 private struct AddFriendsCard: View {
     let findFriends: () -> Void
@@ -218,6 +244,43 @@ private struct AddFriendsCard: View {
     }
 }
 
+/// "Priya invited you to Rocket Team": join or decline, right on Together.
+struct GroupInviteRow: View {
+    @Environment(SocialStore.self) private var social
+    let group: SocialGroup
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                Avatar(groupId: group.id, name: group.name, photoPath: group.photoPath, size: 44)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(group.name).font(.headline)
+                    Text(line).font(.subheadline).foregroundStyle(.secondary)
+                }
+            }
+            .accessibilityElement(children: .combine)
+            HStack(spacing: 10) {
+                Button { Task { await social.acceptInvite(to: group) } } label: {
+                    Text("Join").frame(maxWidth: .infinity, minHeight: 34)
+                }
+                .buttonStyle(.borderedProminent)
+                Button { Task { await social.declineInvite(to: group) } } label: {
+                    Text("Decline").frame(maxWidth: .infinity, minHeight: 34)
+                }
+                .buttonStyle(.bordered)
+            }
+            .font(.subheadline.weight(.semibold))
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var line: String {
+        let who = group.inviter(of: social.myId)?.firstName ?? "Someone"
+        let count = group.people.count
+        return "\(who) invited you · \(count) member\(count == 1 ? "" : "s")"
+    }
+}
+
 private struct MyCheckinRow: View {
     @Environment(SocialStore.self) private var social
     let checkin: Checkin
@@ -230,7 +293,8 @@ private struct MyCheckinRow: View {
                 Avatar(person: checkin.user, size: 44, ring: .dartmouthGreen)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("You're here").font(.headline)
-                    Text([checkin.spot, "until \(checkin.expiresAt.formatted(date: .omitted, time: .shortened))"].compactMap { $0 }.joined(separator: " · "))
+                    Text([checkin.spot, "until \(checkin.expiresAt.formatted(date: .omitted, time: .shortened))",
+                          checkin.audience == .close ? "close friends" : nil].compactMap { $0 }.joined(separator: " · "))
                         .font(.subheadline).foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -239,7 +303,7 @@ private struct MyCheckinRow: View {
             }
             .accessibilityElement(children: .combine)
             if room == nil {
-                Text("Which room? Helps friends find you.").font(.caption).foregroundStyle(.secondary)
+                Text("Which side? Helps friends find you.").font(.caption).foregroundStyle(.secondary)
             }
             FlowLayout {
                 ForEach(FoCoRoom.all, id: \.self) { r in
@@ -274,6 +338,22 @@ private struct AutoCheckinSetting: View {
     }
 }
 
+/// Who sees where you are: all friends, or close friends only. Automatic check-in uses it too.
+private struct ShareWithSetting: View {
+    @Environment(SocialStore.self) private var social
+    @State private var share = ShareWith.friends
+
+    var body: some View {
+        Picker(selection: $share) {
+            ForEach(ShareWith.allCases) { Text($0.title).tag($0) }
+        } label: {
+            Label("Share where I am with", systemImage: "person.2.badge.gearshape")
+        }
+        .onAppear { share = social.defaultShare }
+        .onChange(of: share) { social.defaultShare = share }
+    }
+}
+
 private struct FriendHereRow: View {
     @Environment(SocialStore.self) private var social
     let checkin: Checkin
@@ -287,9 +367,11 @@ private struct FriendHereRow: View {
             }
             Spacer()
             if social.myCheckin == nil && social.myHeading == nil {
-                Button("On my way") { Task { await social.headOver(in: 10) } }
-                    .buttonStyle(.borderedProminent)
-                    .accessibilityHint("Tells your friends you'll be there in about 10 minutes")
+                Button("On my way") {
+                    Task { await social.headOver(at: .now.addingTimeInterval(10 * 60), spot: checkin.spot, joining: checkin.user.id) }
+                }
+                .buttonStyle(.borderedProminent)
+                .accessibilityHint("Tells \(checkin.user.firstName) you'll be there in about 10 minutes")
             }
         }
         .accessibilityElement(children: .combine)
@@ -301,11 +383,16 @@ private struct FriendHereRow: View {
     }
 }
 
-private func arrivalText(_ eta: Date?) -> String {
-    guard let eta else { return "soon" }
-    let mins = Int(eta.timeIntervalSinceNow / 60)
-    if mins <= 1 { return "any minute" }
-    return "around \(eta.formatted(date: .omitted, time: .shortened)) · in \(mins) min"
+private func arrivalText(_ checkin: Checkin) -> String {
+    var parts: [String] = []
+    if let eta = checkin.eta {
+        let mins = Int(eta.timeIntervalSinceNow / 60)
+        parts.append(mins <= 1 ? "any minute" : "around \(eta.formatted(date: .omitted, time: .shortened)) · in \(mins) min")
+    } else {
+        parts.append("soon")
+    }
+    if let spot = checkin.spot { parts.append(spot) }
+    return parts.joined(separator: " · ")
 }
 
 private struct MyHeadingRow: View {
@@ -317,7 +404,8 @@ private struct MyHeadingRow: View {
             Avatar(person: checkin.user, size: 44, ring: .orange)
             VStack(alignment: .leading, spacing: 2) {
                 Text("You're heading over").font(.headline)
-                Text(arrivalText(checkin.eta)).font(.subheadline).foregroundStyle(.secondary)
+                Text(arrivalText(checkin) + (checkin.audience == .close ? " · close friends" : ""))
+                    .font(.subheadline).foregroundStyle(.secondary)
             }
             Spacer()
             Button("Not going") { Task { await social.checkOut() } }
@@ -336,15 +424,18 @@ private struct FriendHeadingRow: View {
             Avatar(person: checkin.user, size: 44, ring: .orange)
             VStack(alignment: .leading, spacing: 2) {
                 Text(checkin.user.displayName).font(.headline)
-                Text(arrivalText(checkin.eta)).font(.subheadline).foregroundStyle(.secondary)
+                Text(arrivalText(checkin)).font(.subheadline).foregroundStyle(.secondary)
+                if checkin.joining == social.myId {
+                    Text("Joining you").font(.caption.weight(.semibold)).foregroundStyle(.tint)
+                }
             }
             Spacer()
             if social.myCheckin == nil && social.myHeading == nil, let eta = checkin.eta {
                 Button("Me too") {
-                    Task { await social.headOver(in: max(1, Int(eta.timeIntervalSinceNow / 60))) }
+                    Task { await social.headOver(at: max(eta, .now.addingTimeInterval(60)), spot: checkin.spot, joining: checkin.user.id) }
                 }
                 .buttonStyle(.borderedProminent)
-                .accessibilityHint("Tells your friends you're going at the same time")
+                .accessibilityHint("Tells \(checkin.user.firstName) you're going at the same time")
             }
         }
         .accessibilityElement(children: .combine)
@@ -355,76 +446,82 @@ struct PlanCard: View {
     @Environment(SocialStore.self) private var social
     let plan: Plan
     let prominent: Bool
-    @State private var showInvite = false
+    /// Opens the plan's page: who's coming, the chat, and (for the host) editing.
+    let open: () -> Void
 
     private var isHost: Bool { plan.host.id == social.myId }
     private var myStatus: RSVP? { plan.status(of: social.myId) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 12) {
-                if let group = plan.group {
-                    Avatar(groupId: group.id, name: group.name, photoPath: group.photoPath, size: 44)
-                } else {
-                    Avatar(person: plan.host, size: 44)
-                }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.headline)
-                    Text(plan.timeLabel)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 0)
-                if isHost {
-                    Menu {
-                        Button { showInvite = true } label: { Label("Invite friends", systemImage: "person.badge.plus") }
-                        // Cancelling shows Undo, so no "are you sure?" (same as swiping the plan).
-                        Button(role: .destructive) { Task { await social.cancel(plan) } } label: {
-                            Label("Cancel plan", systemImage: "xmark.circle")
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis.circle").font(.title3)
+            Button(action: open) {
+                HStack(alignment: .top, spacing: 12) {
+                    if let group = plan.group {
+                        Avatar(groupId: group.id, name: group.name, photoPath: group.photoPath, size: 44)
+                    } else {
+                        Avatar(person: plan.host, size: 44)
                     }
-                    .accessibilityLabel("Plan options")
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(plan.title(me: social.myId)).font(.headline).foregroundStyle(Color.primary)
+                        Text(plan.timeLabel)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                        .padding(.top, 4)
                 }
+                .contentShape(.rect)
             }
+            .buttonStyle(.plain)
+            .accessibilityHint("Shows who's coming and the plan's chat")
 
             if let note = plan.note, !note.isEmpty {
                 Text("“\(note)”").font(.subheadline)
             }
 
-            HStack(spacing: 8) {
-                AvatarStack(people: plan.going)
-                Text(countLine).font(.caption).foregroundStyle(.secondary)
+            Button(action: open) {
+                HStack(spacing: 8) {
+                    AvatarStack(people: plan.going)
+                    Text(countLine).font(.caption).foregroundStyle(.secondary)
+                }
+                .contentShape(.rect)
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel(countLine)
+            .accessibilityHint("Shows who's coming")
 
             if !isHost {
-                HStack(spacing: 8) {
-                    ForEach([RSVP.going, .maybe, .declined], id: \.self) { status in
-                        RSVPButton(status: status, selected: myStatus == status) {
-                            Task { await social.respond(plan, status) }
-                        }
-                    }
-                }
+                RSVPRow(plan: plan, status: myStatus)
             }
         }
         .padding(.vertical, prominent ? 6 : 2)
-        .sheet(isPresented: $showInvite) { InviteFriendsSheet(plan: plan) }
-    }
-
-    private var title: String {
-        let meal = plan.mealKind?.title ?? "Meal"
-        if let group = plan.group { return "\(group.name) · \(meal.lowercased())" }
-        if isHost { return "Your \(meal.lowercased())" }
-        return "\(meal) with \(plan.host.firstName)"
     }
 
     private var countLine: String {
         var parts = ["\(plan.going.count) going"]
         if !plan.maybe.isEmpty { parts.append("\(plan.maybe.count) maybe") }
-        let invited = plan.members.filter { $0.status == .invited }.count
-        if invited > 0 && isHost { parts.append("\(invited) invited") }
+        if !plan.invitedOnly.isEmpty { parts.append("\(plan.invitedOnly.count) invited") }
         return parts.joined(separator: " · ")
+    }
+}
+
+/// Going / Maybe / Can't. Tapping your answer again takes it back.
+struct RSVPRow: View {
+    @Environment(SocialStore.self) private var social
+    let plan: Plan
+    let status: RSVP?
+
+    var body: some View {
+        HStack(spacing: 8) {
+            ForEach([RSVP.going, .maybe, .declined], id: \.self) { option in
+                RSVPButton(status: option, selected: status == option) {
+                    Task { await social.respond(plan, option) }
+                }
+            }
+        }
     }
 }
 
@@ -444,6 +541,9 @@ struct FriendPicker: View {
                 HStack(spacing: 12) {
                     Avatar(person: friend, size: 34)
                     Text(friend.displayName).foregroundStyle(Color.primary)
+                    if friend.isClose {
+                        Image(systemName: "star.fill").font(.caption).foregroundStyle(.orange).accessibilityLabel("Close friend")
+                    }
                     Spacer()
                     Image(systemName: selection.contains(friend.id) ? "checkmark.circle.fill" : "circle")
                         .font(.title3)
@@ -464,7 +564,11 @@ struct InviteFriendsSheet: View {
     var body: some View {
         NavigationStack {
             List {
-                FriendPicker(friends: social.friends, selection: $selection, excluded: Set(plan.members.map(\.user.id)))
+                Section {
+                    FriendPicker(friends: social.recentFriends, selection: $selection, excluded: Set(plan.members.map(\.user.id)))
+                } footer: {
+                    Text("Friends you've eaten with or messaged lately are at the top.")
+                }
             }
             .navigationTitle("Invite friends")
             .navigationBarTitleDisplayMode(.inline)
@@ -501,7 +605,9 @@ private struct RSVPButton: View {
             .foregroundStyle(selected ? Color(uiColor: .systemBackground) : Color.dartmouthGreen)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(status.title)
         .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilityHint(selected ? "Tap again to take back your answer" : "")
         .sensoryFeedback(.selection, trigger: selected)
     }
 }
@@ -545,6 +651,6 @@ private struct ToastHost: ViewModifier {
 }
 
 extension View {
-    /// Shows the store's toast above the tab bar.
+    /// Shows the store's toast at the bottom of a sheet. (In the tabs, the app shows it just above the bottom bar.)
     func toastHost() -> some View { modifier(ToastHost()) }
 }

@@ -135,10 +135,33 @@ def main():
     s, r = call("POST", "/rest/v1/groups", a_tok, {"name": "Test Team", "emoji": "🧪", "created_by": a_id}, {"Prefer": "return=representation"})
     check("create a group", s == 201, r)
     g = r[0]["id"]
+    ret = {"Prefer": "return=representation"}
     s, r = call("POST", "/rest/v1/group_members", a_tok, {"group_id": g, "user_id": b_id})
-    check("add a friend to the group", s == 201, r)
+    check("invite a friend to the group", s == 201, r)
     s, r = call("POST", "/rest/v1/group_members", a_tok, {"group_id": g, "user_id": c_id})
-    check("add a non-friend (club teammate) to the group", s == 201, r)
+    check("invite a non-friend (club teammate) to the group", s == 201, r)
+    s, rows = call("GET", f"/rest/v1/group_members?group_id=eq.{g}&user_id=eq.{b_id}&select=status,invited_by,role", b_tok)
+    check("being added is an invite until you accept", rows and rows[0]["status"] == "invited" and rows[0]["invited_by"] == a_id, rows)
+    s, rows = call("GET", f"/rest/v1/groups?id=eq.{g}&select=name", b_tok)
+    check("someone invited can see the group's name", rows and rows[0]["name"] == "Test Team", rows)
+    s, r = call("POST", "/rest/v1/plans", a_tok, {"meal": "lunch", "starts_at": _soon(), "audience": "group", "group_id": g}, ret)
+    early = r[0]["id"]
+    s, t = rpc("together", b_tok)
+    check("an invite alone doesn't show the group's meal plans", not any(p["id"] == early for p in t["plans"]), "")
+    s, r = call("POST", "/rest/v1/plans", b_tok, {"meal": "dinner", "starts_at": _soon(), "audience": "group", "group_id": g}, ret)
+    check("or let you post to the group", s >= 400, r)
+    s, r = call("PATCH", f"/rest/v1/group_members?group_id=eq.{g}&user_id=eq.{b_id}", b_tok, {"status": "joined", "role": "owner"}, ret)
+    check("accepting can't make you the owner", s >= 400 or r == [], r)
+    s, r = call("PATCH", f"/rest/v1/group_members?group_id=eq.{g}&user_id=eq.{c_id}", b_tok, {"status": "joined"}, ret)
+    check("can't accept someone else's invite", s >= 400 or r == [], r)
+    s, r = call("PATCH", f"/rest/v1/group_members?group_id=eq.{g}&user_id=eq.{b_id}", b_tok, {"status": "joined"}, ret)
+    check("accept a group invite", s == 200 and r and r[0]["status"] == "joined", r)
+    s, t = rpc("together", b_tok)
+    check("and then see the group's meal plans", any(p["id"] == early for p in t["plans"]), "")
+    call("DELETE", f"/rest/v1/plans?id=eq.{early}", a_tok)
+    s, rows = call("GET", "/rest/v1/groups?select=id,name,group_members(user_id,role,profiles(id,name,emoji,photo_path,class_year))", b_tok)
+    check("build 1's group list still loads (group_members has one link to profiles)", s == 200 and any(r["id"] == g for r in rows), rows)
+    call("PATCH", f"/rest/v1/group_members?group_id=eq.{g}&user_id=eq.{c_id}", c_tok, {"status": "joined"})
     e_tok, e_id = login(f"tester.e.{tag}@dartmouth.edu")
     call("POST", "/rest/v1/profiles", e_tok, {"id": e_id, "email": f"tester.e.{tag}@dartmouth.edu", "name": "Tester E"})
     s, r = call("POST", "/rest/v1/group_members", e_tok, {"group_id": g, "user_id": e_id})
@@ -164,7 +187,6 @@ def main():
     check("a non-friend teammate can't see your check-in", not any(ci["user"]["id"] == a_id for ci in t["checkins"]), t["checkins"])
 
     print("Group owner")
-    ret = {"Prefer": "return=representation"}
     def members(group):
         s, rows = call("GET", f"/rest/v1/group_members?group_id=eq.{group}&select=user_id,role", a_tok)
         return {r["user_id"]: r["role"] for r in rows} if s == 200 else {}
@@ -188,12 +210,15 @@ def main():
     s, r = call("DELETE", f"/rest/v1/group_members?group_id=eq.{g}&user_id=eq.{c_id}", b_tok, headers=ret)
     check("the new owner can remove someone", s == 200 and len(r) == 1 and c_id not in members(g), r)
     s, r = call("POST", "/rest/v1/group_members", a_tok, {"group_id": g, "user_id": c_id})
-    check("any member can add people back", s == 201, r)
+    check("any member can invite people back", s == 201, r)
+    s, r = call("DELETE", f"/rest/v1/group_members?group_id=eq.{g}&user_id=eq.{c_id}", c_tok, headers=ret)
+    check("decline a group invite", s == 200 and len(r) == 1, r)
     f_tok, f_id = login(f"tester.f.{tag}@dartmouth.edu")
     call("POST", "/rest/v1/profiles", f_tok, {"id": f_id, "email": f"tester.f.{tag}@dartmouth.edu", "name": "Tester F"})
     s, r = call("POST", "/rest/v1/groups", f_tok, {"name": "Heir Test", "emoji": "👑", "created_by": f_id}, ret)
     g2 = r[0]["id"]
     call("POST", "/rest/v1/group_members", f_tok, {"group_id": g2, "user_id": e_id})
+    call("PATCH", f"/rest/v1/group_members?group_id=eq.{g2}&user_id=eq.{e_id}", e_tok, {"status": "joined"})
     call("PATCH", f"/rest/v1/groups?id=eq.{g2}", f_tok, {"photo_path": f"{f_id}/group-heir.jpg"})
     rpc("delete_my_account", f_tok)
     s, rows = call("GET", f"/rest/v1/groups?id=eq.{g2}&select=created_by,photo_path", e_tok)
@@ -352,6 +377,228 @@ def main():
     rpc("delete_my_account", x_tok)
     rpc("delete_my_account", y_tok)
 
+    print("Close friends")
+    k_tok, k_id = new_user(f"tester.k.{tag}", "Tester K")
+    befriend(k_tok, k_id, a_tok, a_id)
+    once = {"Prefer": "return=minimal,resolution=ignore-duplicates"}
+    s, r = call("POST", "/rest/v1/close_friends", a_tok, {"user_id": a_id, "friend_id": b_id}, once)
+    check("mark a friend as a close friend", s == 201, r)
+    s, r = call("POST", "/rest/v1/close_friends", a_tok, {"user_id": a_id, "friend_id": b_id}, once)
+    check("marking them again is harmless (the app's tap can repeat)", s == 201, r)
+    s, r = call("POST", "/rest/v1/close_friends", a_tok, {"user_id": a_id, "friend_id": c_id})
+    check("only friends can be close friends", s >= 400, r)
+    s, r = call("POST", "/rest/v1/close_friends", b_tok, {"user_id": a_id, "friend_id": k_id})
+    check("can't edit someone else's close friends", s >= 400, r)
+    s, people = rpc("my_people", a_tok)
+    close = {p["id"]: p["close"] for p in people}
+    check("your friends list says who's close", close.get(b_id) is True and close.get(k_id) is False, close)
+    s, rows = call("GET", "/rest/v1/close_friends?select=user_id,friend_id", b_tok)
+    check("nobody else can read your close friends list", s == 200 and rows == [], rows)
+    s, r = rpc("is_close", b_tok, {"owner": a_id, "other": k_id})
+    check("or ask the server who's close to whom", s >= 400, r)
+    call("POST", "/rest/v1/checkins", a_tok, {"user_id": a_id, "eta": _mins(20), "expires_at": _mins(40), "audience": "close"}, {"Prefer": "resolution=merge-duplicates"})
+    s, t = rpc("together", b_tok)
+    check("a close friend sees a close-friends-only going soon", any(ci["user"]["id"] == a_id and ci["audience"] == "close" for ci in t["checkins"]), t["checkins"])
+    s, t = rpc("together", k_tok)
+    check("other friends don't", not any(ci["user"]["id"] == a_id for ci in t["checkins"]), t["checkins"])
+    call("DELETE", f"/rest/v1/checkins?user_id=eq.{a_id}", a_tok)
+
+    print("Taking back an RSVP")
+    s, r = call("POST", "/rest/v1/plans", a_tok, {"meal": "dinner", "starts_at": _soon(), "audience": "invited"}, ret)
+    inv_plan = r[0]["id"]
+    call("POST", "/rest/v1/plan_members", a_tok, {"plan_id": inv_plan, "user_id": b_id, "status": "invited"})
+    call("PATCH", f"/rest/v1/plan_members?plan_id=eq.{inv_plan}&user_id=eq.{b_id}", b_tok, {"status": "going"})
+    s, r = call("PATCH", f"/rest/v1/plan_members?plan_id=eq.{inv_plan}&user_id=eq.{b_id}", b_tok, {"status": "invited", "was_invited": False}, ret)
+    check("an invitee can take back their answer", s == 200 and r and r[0]["status"] == "invited" and r[0]["was_invited"], r)
+    s, r = call("POST", "/rest/v1/plans", a_tok, {"meal": "lunch", "starts_at": _soon(), "audience": "friends"}, ret)
+    open_plan = r[0]["id"]
+    call("POST", "/rest/v1/plan_members", b_tok, {"plan_id": open_plan, "user_id": b_id, "status": "maybe"})
+    s, r = call("PATCH", f"/rest/v1/plan_members?plan_id=eq.{open_plan}&user_id=eq.{b_id}", b_tok, {"status": "invited"}, ret)
+    check("but nobody can mark themselves invited", s >= 400 or r == [], r)
+    s, r = call("DELETE", f"/rest/v1/plan_members?plan_id=eq.{open_plan}&user_id=eq.{b_id}", b_tok, headers=ret)
+    check("on an open plan, taking it back removes the answer", s == 200 and len(r) == 1, r)
+    s, r = call("POST", "/rest/v1/plan_members", b_tok, {"plan_id": open_plan, "user_id": b_id, "status": "invited"})
+    check("and you can't invite yourself", s >= 400, r)
+    s, r = call("PATCH", f"/rest/v1/plans?id=eq.{open_plan}", a_tok, {"meal": "dinner", "starts_at": _soon(3)}, ret)
+    check("the host can change the time", s == 200 and r and r[0]["meal"] == "dinner", r)
+    s, r = call("PATCH", f"/rest/v1/plans?id=eq.{open_plan}", b_tok, {"note": "hijack"}, ret)
+    check("nobody else can", s >= 400 or r == [], r)
+
+    print("Chat")
+    s, r = call("POST", "/rest/v1/groups", a_tok, {"name": "Chat Team", "created_by": a_id}, ret)
+    cg = r[0]["id"]
+    call("POST", "/rest/v1/group_members", a_tok, {"group_id": cg, "user_id": b_id})
+    call("POST", "/rest/v1/group_members", a_tok, {"group_id": cg, "user_id": k_id})
+    call("PATCH", f"/rest/v1/group_members?group_id=eq.{cg}&user_id=eq.{b_id}", b_tok, {"status": "joined"})
+    s, r = call("POST", "/rest/v1/messages", a_tok, {"group_id": cg, "body": "Dinner at 6?"}, ret)
+    check("send a group message", s == 201 and r[0]["sender"] == a_id, r)
+    group_msg = r[0]["id"]
+    s, msgs = rpc("chat_messages", b_tok, {"kind": "group", "target": cg})
+    check("group members read it", s == 200 and any(m["id"] == group_msg and m["sender"]["name"] == "Tester A" for m in msgs), msgs)
+    s, msgs = rpc("chat_messages", k_tok, {"kind": "group", "target": cg})
+    check("someone only invited can't read the group chat yet", s == 200 and msgs == [], msgs)
+    s, r = call("POST", "/rest/v1/messages", k_tok, {"group_id": cg, "body": "hi"})
+    check("or post in it", s >= 400, r)
+    s, r = call("POST", "/rest/v1/messages", c_tok, {"group_id": cg, "body": "hi"})
+    check("outsiders can't post in a group chat", s >= 400, r)
+    s, r = call("POST", "/rest/v1/messages", a_tok, {"group_id": cg, "body": "x" * 1001})
+    check("messages are at most 1000 characters", s >= 400, r)
+    s, r = call("POST", "/rest/v1/messages", a_tok, {"group_id": cg, "body": "   "})
+    check("and not blank", s >= 400, r)
+    s, r = call("POST", "/rest/v1/messages", b_tok, {"group_id": cg, "sender": a_id, "body": "fake"})
+    check("can't send as someone else", s >= 400, r)
+
+    s, r = call("POST", "/rest/v1/messages", b_tok, {"plan_id": inv_plan, "body": "Running 5 late"}, ret)
+    check("people invited to a plan can chat in it", s == 201, r)
+    s, msgs = rpc("chat_messages", a_tok, {"kind": "plan", "target": inv_plan})
+    check("the host reads it", any(m["body"] == "Running 5 late" for m in msgs), msgs)
+    s, msgs = rpc("chat_messages", k_tok, {"kind": "plan", "target": inv_plan})
+    check("people not in the plan can't", msgs == [], msgs)
+    s, r = call("POST", "/rest/v1/messages", k_tok, {"plan_id": inv_plan, "body": "hi"})
+    check("or post in it", s >= 400, r)
+
+    s, r = call("POST", "/rest/v1/messages", a_tok, {"recipient": b_id, "body": "You coming?"}, ret)
+    check("message a friend", s == 201, r)
+    dm = r[0]["id"]
+    s, r = call("POST", "/rest/v1/messages", a_tok, {"recipient": c_id, "body": "hey"})
+    check("can't message someone who isn't your friend", s >= 400, r)
+    s, msgs = rpc("chat_messages", b_tok, {"kind": "dm", "target": a_id})
+    check("they read it", any(m["id"] == dm for m in msgs), msgs)
+    s, msgs = rpc("chat_messages", k_tok, {"kind": "dm", "target": a_id})
+    check("nobody else does", not any(m["id"] == dm for m in msgs), msgs)
+    s, rows = call("GET", f"/rest/v1/messages?id=eq.{dm}&select=body", k_tok)
+    check("not even reading the table directly", rows == [], rows)
+
+    s, chats = rpc("my_chats", b_tok)
+    by = {(c["kind"], c["id"]): c for c in chats}
+    check("the chat list has the group, the plan, and the DM", ("group", cg) in by and ("plan", inv_plan) in by and ("dm", a_id) in by, list(by))
+    check("with unread counts", by.get(("dm", a_id), {}).get("unread") == 1 and by.get(("group", cg), {}).get("unread") == 1, by.get(("dm", a_id)))
+    check("and the last message", by.get(("dm", a_id), {}).get("last_body") == "You coming?", by.get(("dm", a_id)))
+    s, r = call("POST", "/rest/v1/chat_reads", b_tok, {"user_id": b_id, "thread": f"dm:{a_id}", "read_at": _mins(0)}, {"Prefer": "resolution=merge-duplicates"})
+    s, chats = rpc("my_chats", b_tok)
+    by = {(c["kind"], c["id"]): c for c in chats}
+    check("reading a chat clears its count", s == 200 and by.get(("dm", a_id), {}).get("unread") == 0, by.get(("dm", a_id)))
+    s, r = call("POST", "/rest/v1/chat_reads", b_tok, {"user_id": a_id, "thread": f"dm:{b_id}"})
+    check("can't mark someone else's chats read", s >= 400, r)
+    s, chats = rpc("my_chats", k_tok)
+    check("an invite doesn't put the group in your chats", not any(c["id"] == cg for c in chats), chats)
+
+    s, r = call("POST", "/rest/v1/message_reports", b_tok, {"message_id": group_msg, "reporter": b_id, "reason": "test"}, once)
+    check("report a message", s == 201, r)
+    s, r = call("POST", "/rest/v1/message_reports", b_tok, {"message_id": group_msg, "reporter": b_id}, once)
+    check("reporting it twice is harmless", s == 201, r)
+    s, r = call("DELETE", f"/rest/v1/messages?id=eq.{group_msg}", b_tok, headers=ret)
+    check("can't delete someone else's message", s >= 400 or r == [], r)
+    s, r = call("DELETE", f"/rest/v1/messages?id=eq.{dm}", a_tok, headers=ret)
+    check("unsend your own", s == 200 and len(r) == 1, r)
+    call("POST", "/rest/v1/blocks", b_tok, {"blocker": b_id, "blocked": a_id})
+    s, msgs = rpc("chat_messages", b_tok, {"kind": "group", "target": cg})
+    check("blocking someone hides their messages in shared groups", not any(m["sender"]["id"] == a_id for m in msgs), msgs)
+    call("DELETE", f"/rest/v1/blocks?blocker=eq.{b_id}&blocked=eq.{a_id}", b_tok)
+
+    print("Push notifications")
+    tok_b, tok_k = "ab" * 32, "cd" * 32
+    s, r = rpc("register_device", b_tok, {"device_token": tok_b, "use_sandbox": True})
+    check("register a phone for notifications", s in (200, 204), r)
+    rpc("register_device", k_tok, {"device_token": tok_k})
+    s, r = rpc("register_device", b_tok, {"device_token": "not a token"})
+    check("junk tokens are rejected", s >= 400, r)
+    s, rows = call("GET", "/rest/v1/devices?select=token", b_tok)
+    check("phones' tokens aren't readable by anyone", s >= 400 or rows == [], rows)
+    s, rows = call("GET", "/rest/v1/push_queue?select=id", b_tok)
+    check("neither is the notification queue", s >= 400 or rows == [], rows)
+    s, r = rpc("queue_push", b_tok, {"recipients": [k_id], "title": "spam", "body": "spam"})
+    check("and nobody can send notifications directly", s >= 400, r)
+
+    def queued(since):
+        s, rows = call("GET", f"/rest/v1/push_queue?id=gt.{since}&select=id,recipients,title,body,route,kind&order=id", service)
+        return rows if s == 200 else []
+    def last_id():
+        s, rows = call("GET", "/rest/v1/push_queue?select=id&order=id.desc&limit=1", service)
+        return rows[0]["id"] if rows else 0
+
+    mark = last_id()
+    call("POST", "/rest/v1/messages", a_tok, {"recipient": b_id, "body": "ping"})
+    q = queued(mark)
+    check("a message notifies the person it's for", any(b_id in n["recipients"] and n["title"] == "Tester A" and n["body"] == "ping" for n in q), q)
+    check("and opens that chat", any(n["route"].get("chat") == f"dm:{a_id}" for n in q), q)
+    call("POST", "/rest/v1/notify_settings", b_tok, {"user_id": b_id, "messages": False}, {"Prefer": "resolution=merge-duplicates"})
+    mark = last_id()
+    call("POST", "/rest/v1/messages", a_tok, {"recipient": b_id, "body": "ping 2"})
+    check("unless they turned message notifications off", queued(mark) == [], queued(mark))
+    s, r = call("POST", "/rest/v1/notify_settings", b_tok, {"user_id": k_id, "messages": False})
+    check("can't change someone else's notification settings", s >= 400, r)
+    call("PATCH", f"/rest/v1/notify_settings?user_id=eq.{b_id}", b_tok, {"messages": True})
+
+    mark = last_id()
+    call("POST", "/rest/v1/checkins", a_tok, {"user_id": a_id, "eta": _mins(15), "expires_at": _mins(35), "started_at": _mins(0)}, {"Prefer": "resolution=merge-duplicates"})
+    check("a quiet going soon doesn't notify anyone", not any(n["kind"] == "going" for n in queued(mark)), queued(mark))
+    call("POST", "/rest/v1/checkins", a_tok, {"user_id": a_id, "eta": _mins(15), "expires_at": _mins(35), "started_at": _mins(0, 1), "notify": True}, {"Prefer": "resolution=merge-duplicates"})
+    q = [n for n in queued(mark) if n["kind"] == "going"]
+    check("an out-loud going soon notifies friends", q and b_id in q[0]["recipients"] and k_id in q[0]["recipients"] and q[0]["title"] == "Tester is going to FoCo", q)
+    mark = last_id()
+    call("POST", "/rest/v1/checkins", a_tok, {"user_id": a_id, "eta": _mins(15), "expires_at": _mins(35), "started_at": _mins(0, 2), "notify": True}, {"Prefer": "resolution=merge-duplicates"})
+    check("but not again within 20 minutes", not any(n["kind"] == "going" for n in queued(mark)), queued(mark))
+    call("POST", "/rest/v1/notify_settings", k_tok, {"user_id": k_id, "going": "close"}, {"Prefer": "resolution=merge-duplicates"})
+
+    rpc("register_device", a_tok, {"device_token": "ef" * 32})
+    mark = last_id()
+    call("POST", "/rest/v1/checkins", k_tok, {"user_id": k_id, "eta": _mins(10), "expires_at": _mins(30), "started_at": _mins(0, 3), "joining": a_id}, {"Prefer": "resolution=merge-duplicates"})
+    q = queued(mark)
+    check("'Me too' tells the friend you're joining", any(n["recipients"] == [a_id] and n["title"] == "Tester is joining you" for n in q), q)
+
+    mark = last_id()
+    call("POST", "/rest/v1/checkins", a_tok, {"user_id": a_id, "eta": None, "expires_at": _mins(45), "started_at": _mins(0, 4)}, {"Prefer": "resolution=merge-duplicates"})
+    check("getting to FoCo doesn't notify friends by default", not any(n["kind"] == "arrival" for n in queued(mark)), queued(mark))
+    call("POST", "/rest/v1/close_friends", b_tok, {"user_id": b_id, "friend_id": a_id})
+    mark = last_id()
+    call("POST", "/rest/v1/checkins", a_tok, {"user_id": a_id, "eta": None, "expires_at": _mins(45), "started_at": _mins(0, 5), "spot": "Dark side"}, {"Prefer": "resolution=merge-duplicates"})
+    q = [n for n in queued(mark) if n["kind"] == "arrival"]
+    check("only friends who made you a close friend", len(q) == 1 and q[0]["recipients"] == [b_id] and q[0]["title"] == "Tester is at FoCo" and q[0]["body"] == "Dark side", q)
+    call("DELETE", f"/rest/v1/checkins?user_id=eq.{a_id}", a_tok)
+
+    mark = last_id()
+    s, r = call("POST", "/rest/v1/plans", a_tok, {"meal": "lunch", "starts_at": _soon(), "audience": "invited"}, ret)
+    pp = r[0]["id"]
+    call("POST", "/rest/v1/plan_members", a_tok, {"plan_id": pp, "user_id": b_id, "status": "invited"})
+    q = queued(mark)
+    check("an invite notifies the person invited", any(n["recipients"] == [b_id] and n["title"] == "Tester invited you to lunch" for n in q), q)
+    mark = last_id()
+    call("PATCH", f"/rest/v1/plan_members?plan_id=eq.{pp}&user_id=eq.{b_id}", b_tok, {"status": "going"})
+    q = queued(mark)
+    check("saying you're going tells the host", any(n["recipients"] == [a_id] and n["title"] == "Tester is coming to lunch" for n in q), q)
+    mark = last_id()
+    call("PATCH", f"/rest/v1/plans?id=eq.{pp}", a_tok, {"starts_at": _soon(3)})
+    q = queued(mark)
+    check("changing the time tells everyone in the plan", any(n["recipients"] == [b_id] and n["title"] == "Tester changed lunch" for n in q), q)
+    mark = last_id()
+    call("PATCH", f"/rest/v1/plans?id=eq.{pp}", a_tok, {"cancelled": True})
+    q = queued(mark)
+    check("and so does cancelling", any(n["recipients"] == [b_id] and n["title"] == "Tester cancelled lunch" for n in q), q)
+
+    mark = last_id()
+    s, r = call("POST", "/rest/v1/groups", b_tok, {"name": "Push Team", "created_by": b_id}, ret)
+    pg = r[0]["id"]
+    call("POST", "/rest/v1/group_members", b_tok, {"group_id": pg, "user_id": k_id})
+    q = queued(mark)
+    check("a group invite notifies the person invited", any(n["recipients"] == [k_id] and n["title"] == "Tester invited you to Push Team" for n in q), q)
+    call("PATCH", f"/rest/v1/group_members?group_id=eq.{pg}&user_id=eq.{k_id}", k_tok, {"status": "joined"})
+    mark = last_id()
+    call("POST", "/rest/v1/plans", b_tok, {"meal": "dinner", "starts_at": _soon(), "audience": "group", "group_id": pg})
+    q = queued(mark)
+    check("a team meal notifies the team", any(k_id in n["recipients"] and n["title"] == "Push Team · dinner" for n in q), q)
+    mark = last_id()
+    call("POST", "/rest/v1/messages", k_tok, {"group_id": pg, "body": "on my way"})
+    q = queued(mark)
+    check("a group message notifies everyone else in the group", any(n["recipients"] == [b_id] and n["title"] == "Push Team" and n["body"] == "Tester: on my way" for n in q), q)
+    rpc("unregister_device", b_tok, {"device_token": tok_b})
+    mark = last_id()
+    call("POST", "/rest/v1/messages", k_tok, {"group_id": pg, "body": "again"})
+    check("signing out stops notifications to that phone", queued(mark) == [], queued(mark))
+    call("DELETE", f"/rest/v1/groups?id=eq.{pg}", b_tok)
+    call("DELETE", f"/rest/v1/groups?id=eq.{cg}", a_tok)
+    rpc("delete_my_account", k_tok)
+
     print("Photo cleanup")
     name = path.split("/", 1)[1] if "/" in path else ""
     s, files = call("POST", "/storage/v1/object/list/meal-photos", a_tok, {"prefix": a_id})
@@ -383,9 +630,25 @@ def main():
     return 1 if failures else 0
 
 
-def _soon():
+def new_user(handle, name):
+    tok, uid = login(f"{handle}@dartmouth.edu")
+    call("POST", "/rest/v1/profiles", tok, {"id": uid, "email": f"{handle}@dartmouth.edu", "name": name})
+    return tok, uid
+
+
+def befriend(tok1, id1, tok2, id2):
+    call("POST", "/rest/v1/friendships", tok1, {"requester": id1, "addressee": id2})
+    call("PATCH", f"/rest/v1/friendships?requester=eq.{id1}&addressee=eq.{id2}", tok2, {"status": "accepted"})
+
+
+def _soon(hours=2, seconds=0):
     from datetime import datetime, timedelta, timezone
-    return (datetime.now(timezone.utc) + timedelta(hours=2)).isoformat()
+    return (datetime.now(timezone.utc) + timedelta(hours=hours, seconds=seconds)).isoformat()
+
+
+def _mins(minutes, seconds=0):
+    from datetime import datetime, timedelta, timezone
+    return (datetime.now(timezone.utc) + timedelta(minutes=minutes, seconds=seconds)).isoformat()
 
 
 if __name__ == "__main__":

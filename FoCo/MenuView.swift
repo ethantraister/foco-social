@@ -5,7 +5,7 @@ struct MenuView: View {
     @Environment(Preferences.self) private var prefs
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.scenePhase) private var scenePhase
-    @AppStorage("tab") private var tab = 0
+    @AppStorage("tab") private var tab = AppTab.together.rawValue
     @State private var leftAt: Date?
     @State private var date = FoCoCalendar.startOfDay(.now)
     @State private var meal = UserDefaults.standard.string(forKey: "meal").flatMap(Meal.init) ?? .current
@@ -33,17 +33,30 @@ struct MenuView: View {
         return (all, "\(who) \(verb)")
     }
     private var visible: [FoodItem] { (allItems ?? []).filter(prefs.allows) }
-    private var mains: [FoodItem] { visible.filter(\.isMain) }
     private var saladBar: [FoodItem] { meal.includesSaladBar ? store.saladBar(on: date).filter(prefs.allows) : [] }
 
-    private var stations: [(name: String, items: [FoodItem])] {
+    /// Today's desserts, once each (the same cookie can be at two stations).
+    private var desserts: [FoodItem] {
+        var seen = Set<String>()
+        return visible.filter { $0.isDessert && seen.insert($0.name.lowercased()).inserted }
+    }
+
+    /// Each station's main dishes up front and everything else under "More". Desserts are in their own section.
+    private struct Station: Identifiable {
+        let name: String
+        var mains: [FoodItem] = []
+        var more: [FoodItem] = []
+        var id: String { name }
+    }
+
+    private var stations: [Station] {
         var order: [String] = []
-        var groups: [String: [FoodItem]] = [:]
-        for item in visible where !item.isMain {
-            if groups[item.station] == nil { order.append(item.station) }
-            groups[item.station, default: []].append(item)
+        var byName: [String: Station] = [:]
+        for item in visible where !item.isDessert {
+            if byName[item.station] == nil { order.append(item.station); byName[item.station] = Station(name: item.station) }
+            if item.isMain { byName[item.station]!.mains.append(item) } else { byName[item.station]!.more.append(item) }
         }
-        return order.map { ($0, groups[$0]!) }
+        return order.compactMap { byName[$0] }
     }
 
     var body: some View {
@@ -72,7 +85,7 @@ struct MenuView: View {
 
             if let social = friendsLine {
                 Section {
-                    Button { tab = 1 } label: {
+                    Button { tab = AppTab.together.rawValue } label: {
                         HStack(spacing: 10) {
                             AvatarStack(people: social.people, max: 3, size: 26)
                             Text(social.text).font(.subheadline).foregroundStyle(Color.primary)
@@ -142,31 +155,50 @@ struct MenuView: View {
 
     @ViewBuilder private var content: some View {
         if let all = allItems, !all.isEmpty {
-            Section {
-                if mains.isEmpty {
+            if !desserts.isEmpty {
+                Section {
+                    DessertStrip(items: desserts, date: date, meal: meal)
+                        .listRowInsets(EdgeInsets(top: 12, leading: 0, bottom: 12, trailing: 0))
+                } header: {
+                    Label("Desserts \(FoCoCalendar.phrase(date))", systemImage: "birthday.cake.fill")
+                        .foregroundStyle(Color.dessert)
+                }
+            }
+
+            let withMains = stations.filter { !$0.mains.isEmpty }
+            if withMains.isEmpty && !visible.isEmpty {
+                Section {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("No main dishes fit your diet this meal.")
-                        Button("Show everything") { prefs.filtersPaused = true }
+                        if prefs.filtering { Button("Show everything") { prefs.filtersPaused = true } }
                     }
                     .foregroundStyle(.secondary)
-                } else {
-                    ForEach(mains) { item in
+                }
+            }
+
+            ForEach(withMains) { station in
+                Section {
+                    ForEach(station.mains) { item in
                         NavigationLink(value: FoodRoute(item: item, date: date, meal: meal)) {
-                            FoodRow(item: item, prominent: true)
+                            FoodRow(item: item, prominent: true, showStation: false)
                         }
                         .watchSwipe(item.name)
                     }
+                    if !station.more.isEmpty {
+                        moreGroup("More from \(station.name)", items: station.more, key: station.name)
+                    }
+                } header: {
+                    Text(station.name)
+                } footer: {
+                    if station.id == withMains.first?.id { Text("Swipe right on any dish to get an alert next time it's served.") }
                 }
-            } header: {
-                Text("Main dishes")
-            } footer: {
-                if !mains.isEmpty { Text("Swipe right on any dish to get an alert next time it's served.") }
             }
 
-            if !stations.isEmpty {
-                Section("Everything else, by station") {
-                    ForEach(stations, id: \.name) { station in
-                        stationGroup(station.name, subtitle: preview(station.items), items: station.items)
+            let sidesOnly = stations.filter { $0.mains.isEmpty && !$0.more.isEmpty }
+            if !sidesOnly.isEmpty {
+                Section("Sides, salads, and more") {
+                    ForEach(sidesOnly) { station in
+                        stationGroup(station.name, subtitle: preview(station.more), items: station.more)
                     }
                 }
             }
@@ -229,6 +261,27 @@ struct MenuView: View {
                     .lineLimit(typeSize.isAccessibilitySize ? 3 : 1)
             }
             .padding(.vertical, 2)
+        }
+    }
+
+    /// "More from Hearth (6)": a station's sides, sauces, and everyday items, folded away.
+    private func moreGroup(_ title: String, items: [FoodItem], key: String) -> some View {
+        DisclosureGroup(isExpanded: binding(for: "more|" + key)) {
+            ForEach(items) { item in
+                NavigationLink(value: FoodRoute(item: item, date: date, meal: meal)) {
+                    FoodRow(item: item, showStation: false)
+                }
+                .watchSwipe(item.name)
+            }
+        } label: {
+            HStack {
+                Text(title).font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
+                Spacer()
+                Text("\(items.count)")
+                    .font(.subheadline.monospacedDigit())
+                    .foregroundStyle(.tertiary)
+                    .accessibilityLabel("\(items.count) items")
+            }
         }
     }
 
@@ -323,9 +376,59 @@ struct DayStrip: View {
                 }
             }
         }
+        .noTabBarMargin()
     }
 
     private func label(_ d: Date) -> String {
         FoCoCalendar.cal.isDateInToday(d) ? "Today" : d.formatted(Date.FormatStyle(timeZone: FoCoCalendar.tz).weekday(.abbreviated))
+    }
+}
+
+extension Color {
+    /// The dessert highlight: a warm raspberry, so desserts stand out from the green.
+    static let dessert = Color(red: 0.80, green: 0.22, blue: 0.42)
+}
+
+/// Desserts as big cards you scroll sideways through, at the top of the menu.
+private struct DessertStrip: View {
+    let items: [FoodItem]
+    let date: Date
+    let meal: Meal
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(alignment: .top, spacing: 10) {
+                ForEach(items) { item in
+                    NavigationLink(value: FoodRoute(item: item, date: date, meal: meal)) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Image(systemName: "birthday.cake")
+                                .font(.title3)
+                                .foregroundStyle(Color.dessert)
+                            Spacer(minLength: 0)
+                            Text(item.name)
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(Color.primary)
+                                .multilineTextAlignment(.leading)
+                                .fixedSize(horizontal: false, vertical: true)
+                            if let cal = item.calories {
+                                Text("\(Int(cal)) cal").font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                        .padding(12)
+                        // Every card as tall as the tallest, so long names wrap instead of being cut off.
+                        .frame(width: 150, alignment: .topLeading)
+                        .frame(minHeight: 120, maxHeight: .infinity, alignment: .topLeading)
+                        .background(Color.dessert.opacity(0.1), in: .rect(cornerRadius: 16))
+                        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Color.dessert.opacity(0.25)))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(item.accessibilitySummary)
+                    .watchSwipe(item.name)
+                }
+            }
+            .padding(.horizontal, 16)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        .noTabBarMargin()
     }
 }

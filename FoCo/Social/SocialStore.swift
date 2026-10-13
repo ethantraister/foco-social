@@ -20,17 +20,21 @@ final class SocialStore {
     private(set) var people: [Person] = []
     private(set) var groups: [SocialGroup] = []
     private(set) var blocked: [Person] = []
-    private(set) var feeds: [PostKind: [Post]] = [:]
-    private(set) var bestToday: Post?
+    /// Every chat you're in, newest activity first.
+    private(set) var chats: [ChatThread] = []
+    private(set) var loadedChats = false
     private(set) var loadedTogether = false
     private(set) var loadedPeople = false
     /// The last request couldn't reach the server. Screens say so instead of spinning.
     private(set) var isOffline = false
     /// Other people's plans you swiped away; kept on this phone only.
     private(set) var hiddenPlans: Set<UUID> = Set((UserDefaults.standard.stringArray(forKey: "hiddenPlans") ?? []).compactMap(UUID.init))
-    /// Posts you reported, hidden for you right away (everyone else's feed hides them after three reports).
-    private(set) var reportedPosts: Set<UUID> = Set((UserDefaults.standard.stringArray(forKey: "reportedPosts") ?? []).compactMap(UUID.init))
-    private var feedSort = "top"
+    /// Messages you reported, hidden for you right away.
+    private(set) var reportedMessages: Set<UUID> = Set((UserDefaults.standard.stringArray(forKey: "reportedMessages") ?? []).compactMap(UUID.init))
+    /// The chat on screen right now, so its notifications don't pop up over it.
+    var openChat: ChatTarget?
+    /// This phone's push token, once iOS hands it over.
+    private var deviceToken: String? = UserDefaults.standard.string(forKey: "deviceToken")
     var errorMessage: String?
 
     /// A short note at the bottom of the screen, like "Plan cancelled · Undo", instead of asking "are you sure?" first.
@@ -67,8 +71,9 @@ final class SocialStore {
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("-resetForUITests") {
             hiddenPlans = []
-            reportedPosts = []
+            reportedMessages = []
             UserDefaults.standard.removeObject(forKey: Self.meKey)
+            UserDefaults.standard.removeObject(forKey: "recentPeople")
         }
         #endif
         guard let session = client.session else { return }
@@ -111,6 +116,41 @@ final class SocialStore {
     var incoming: [Person] { people.filter { $0.relation == "incoming" } }
     var outgoing: [Person] { people.filter { $0.relation == "outgoing" } }
 
+    var closeFriends: [Person] { friends.filter(\.isClose) }
+
+    /// Friends you've eaten with, invited, or messaged lately come first; then everyone else by name.
+    var recentFriends: [Person] {
+        var last = recentPeople
+        func note(_ id: UUID, _ date: Date) { last[id] = max(last[id] ?? .distantPast, date) }
+        for plan in together.plans where plan.host.id == myId || plan.status(of: myId) != nil {
+            if plan.host.id != myId { note(plan.host.id, plan.startsAt) }
+            for m in plan.members where m.user.id != myId { note(m.user.id, plan.startsAt) }
+        }
+        for chat in chats where chat.kind == "dm" { if let at = chat.lastAt { note(chat.id, at) } }
+        return friends.sorted { a, b in
+            let (x, y) = (last[a.id] ?? .distantPast, last[b.id] ?? .distantPast)
+            return x != y ? x > y : a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
+        }
+    }
+
+    /// People you picked for a plan, group, or message, and when. Kept on this phone for "recent friends".
+    private var recentPeople: [UUID: Date] {
+        let raw = UserDefaults.standard.dictionary(forKey: "recentPeople") as? [String: Double] ?? [:]
+        return Dictionary(uniqueKeysWithValues: raw.compactMap { k, v in UUID(uuidString: k).map { ($0, Date(timeIntervalSince1970: v)) } })
+    }
+
+    private func noteRecent(_ ids: [UUID]) {
+        var raw = UserDefaults.standard.dictionary(forKey: "recentPeople") as? [String: Double] ?? [:]
+        for id in ids { raw[id.uuidString] = Date.now.timeIntervalSince1970 }
+        UserDefaults.standard.set(raw, forKey: "recentPeople")
+    }
+
+    var joinedGroups: [SocialGroup] { groups.filter { $0.hasJoined(myId) } }
+    var groupInvites: [SocialGroup] { groups.filter { !$0.hasJoined(myId) } }
+    var unreadMessages: Int { chats.reduce(0) { $0 + $1.unread } }
+    /// The Together tab's badge: meal invites, group invites, and friend requests.
+    var togetherBadge: Int { invites.count + groupInvites.count + incoming.count }
+
     var invites: [Plan] { together.plans.filter { $0.status(of: myId) == .invited && !hiddenPlans.contains($0.id) } }
     var upcoming: [Plan] { together.plans.filter { $0.status(of: myId) != .invited && !hiddenPlans.contains($0.id) } }
     private var myRow: Checkin? { together.checkins.first { $0.user.id == myId } }
@@ -144,6 +184,7 @@ final class SocialStore {
             if let mine = rows.first {
                 me = mine
                 phase = .ready
+                await registerDevice()
                 await refreshAll()
             } else {
                 me = nil
@@ -163,7 +204,13 @@ final class SocialStore {
         switch phase {
         case .loading: await bootstrap()
         case .ready:
-            if Date.now.timeIntervalSince(lastFullRefresh) > 5 * 60 { await refreshAll() } else { await refreshTogether() }
+            if Date.now.timeIntervalSince(lastFullRefresh) > 5 * 60 {
+                await refreshAll()
+            } else {
+                async let a: Void = refreshTogether()
+                async let b: Void = refreshChats()
+                _ = await (a, b)
+            }
         default: break
         }
     }
@@ -242,7 +289,13 @@ final class SocialStore {
     func photoURL(path: String) -> URL { client.publicURL(path) }
 
     func signOut() {
-        client.signOut()
+        // This phone stops getting the account's notifications (best effort; the server also forgets dead tokens).
+        if let token = deviceToken {
+            let client = client
+            Task { try? await client.rpcVoid("unregister_device", ["device_token": token]); client.signOut() }
+        } else {
+            client.signOut()
+        }
         reset()
     }
 
@@ -267,8 +320,9 @@ final class SocialStore {
         people = []
         groups = []
         blocked = []
-        feeds = [:]
-        bestToday = nil
+        chats = []
+        loadedChats = false
+        openChat = nil
         loadedTogether = false
         loadedPeople = false
         sentRequests = []
@@ -277,9 +331,10 @@ final class SocialStore {
         isOffline = false
         try? FileManager.default.removeItem(at: Self.togetherCache)
         hiddenPlans = []
-        reportedPosts = []
-        UserDefaults.standard.removeObject(forKey: "hiddenPlans")
-        UserDefaults.standard.removeObject(forKey: "reportedPosts")
+        reportedMessages = []
+        notifySettings = NotifySettings()
+        for key in ["hiddenPlans", "reportedMessages", "recentPeople"] { UserDefaults.standard.removeObject(forKey: key) }
+        MaybeReminders.cancelAll()
     }
 
     // MARK: Loading
@@ -289,7 +344,8 @@ final class SocialStore {
         async let a: Void = refreshTogether()
         async let b: Void = refreshPeople()
         async let c: Void = refreshGroups()
-        _ = await (a, b, c)
+        async let d: Void = refreshChats()
+        _ = await (a, b, c, d)
     }
 
     func refreshTogether() async {
@@ -298,8 +354,8 @@ final class SocialStore {
             together = try await client.rpc("together", ["window_hours": 24 * 8])
             loadedTogether = true
             saveTogether()
-            notifyAboutNewInvites()
         }
+        if loadedTogether { MaybeReminders.schedule(for: together.plans.filter { $0.status(of: myId) == .maybe }) }
     }
 
     func refreshPeople() async {
@@ -314,7 +370,7 @@ final class SocialStore {
         guard phase == .ready else { return }
         await run(silent: true) {
             groups = try await client.select("groups", [
-                "select": "id,name,emoji,photo_path,created_by,group_members(user_id,role,profiles(id,name,emoji,photo_path,class_year))",
+                "select": "id,name,emoji,photo_path,created_by,group_members(user_id,role,status,invited_by,profiles!group_members_user_id_fkey(id,name,emoji,photo_path,class_year))",
                 "order": "name",
             ])
         }
@@ -332,17 +388,11 @@ final class SocialStore {
         }
     }
 
-    func refreshFeed(_ kind: PostKind, sort: String) async {
+    func refreshChats() async {
         guard phase == .ready else { return }
-        feedSort = sort
         await run(silent: true) {
-            let rows: [Post] = try await client.rpc("feed", ["kind_filter": kind.rawValue, "sort": sort, "lim": 80])
-            feeds[kind] = rows.filter { !reportedPosts.contains($0.id) }
-            if kind == .photo {
-                let today = FoCoCalendar.dayString(.now)
-                let top: [Post] = try await client.rpc("feed", ["kind_filter": "photo", "day": today, "sort": "top", "lim": 5])
-                bestToday = top.first { !reportedPosts.contains($0.id) && $0.votes > 0 }
-            }
+            chats = try await client.rpc("my_chats")
+            loadedChats = true
         }
     }
 
@@ -358,12 +408,19 @@ final class SocialStore {
         if let plan { together.plans[i] = plan } else { together.plans.remove(at: i) }
     }
 
+    /// Who sees your check-ins and going soon unless you pick otherwise (automatic check-in always uses this).
+    var defaultShare: ShareWith {
+        get { ShareWith(rawValue: UserDefaults.standard.string(forKey: "shareWith") ?? "") ?? .friends }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: "shareWith") }
+    }
+
     @discardableResult
-    func checkIn(spot: String?, minutes: Int, auto: Bool = false) async -> Bool {
+    func checkIn(spot: String?, minutes: Int, auto: Bool = false, share: ShareWith? = nil, joining: UUID? = nil) async -> Bool {
         guard let id = myId else { return false }
         let before = together.checkins
         let expires = Date.now.addingTimeInterval(Double(minutes) * 60)
-        if let me { setMyCheckin(Checkin(user: me, spot: spot, eta: nil, startedAt: .now, expiresAt: expires)) }
+        let share = share ?? defaultShare
+        if let me { setMyCheckin(Checkin(user: me, spot: spot, eta: nil, startedAt: .now, expiresAt: expires, audience: share, joining: joining)) }
         let ok = await run(silent: auto) {
             try await client.insert("checkins", [
                 "user_id": id.uuidString,
@@ -371,6 +428,9 @@ final class SocialStore {
                 "eta": NSNull(),
                 "started_at": SupabaseClient.isoString(.now),
                 "expires_at": SupabaseClient.isoString(expires),
+                "audience": share.rawValue,
+                "joining": joining.map { $0.uuidString as Any } ?? NSNull(),
+                "notify": false,
             ], upsert: true)
         }
         if ok { UserDefaults.standard.set(auto, forKey: "autoCheckin.active") } else { together.checkins = before }
@@ -378,19 +438,26 @@ final class SocialStore {
         return ok
     }
 
-    /// "I'll be at FoCo in 30 min": friends see it until 20 minutes after you said you'd arrive.
-    func headOver(in minutes: Int) async {
+    /// "I'll be at FoCo around 6:30": friends see it until 20 minutes after you said you'd arrive.
+    /// `notify` is "out loud": friends get a notification. `joining` is the friend you tapped Me too / On my way for.
+    func headOver(at eta: Date, spot: String? = nil, share: ShareWith? = nil, notify: Bool = false, joining: UUID? = nil) async {
         guard let id = myId else { return }
         let before = together.checkins
-        let eta = Date.now.addingTimeInterval(Double(minutes) * 60)
-        if let me { setMyCheckin(Checkin(user: me, spot: nil, eta: eta, startedAt: .now, expiresAt: eta.addingTimeInterval(20 * 60))) }
+        let share = share ?? defaultShare
+        if let me {
+            setMyCheckin(Checkin(user: me, spot: spot, eta: eta, startedAt: .now, expiresAt: eta.addingTimeInterval(20 * 60),
+                                 audience: share, joining: joining))
+        }
         let ok = await run {
             try await client.insert("checkins", [
                 "user_id": id.uuidString,
-                "spot": NSNull(),
+                "spot": spot.map { $0 as Any } ?? NSNull(),
                 "eta": SupabaseClient.isoString(eta),
                 "started_at": SupabaseClient.isoString(.now),
                 "expires_at": SupabaseClient.isoString(eta.addingTimeInterval(20 * 60)),
+                "audience": share.rawValue,
+                "joining": joining.map { $0.uuidString as Any } ?? NSNull(),
+                "notify": notify,
             ], upsert: true)
         }
         if ok { UserDefaults.standard.set(false, forKey: "autoCheckin.active") } else { together.checkins = before }
@@ -400,7 +467,8 @@ final class SocialStore {
     /// Says which room you're in without restarting the check-in.
     func setSpot(_ spot: String) async {
         guard let id = myId, let mine = myCheckin else { return }
-        setMyCheckin(Checkin(user: mine.user, spot: spot, eta: mine.eta, startedAt: mine.startedAt, expiresAt: mine.expiresAt))
+        setMyCheckin(Checkin(user: mine.user, spot: spot, eta: mine.eta, startedAt: mine.startedAt, expiresAt: mine.expiresAt,
+                             audience: mine.audience, joining: mine.joining))
         await run { try await client.update("checkins", where: ["user_id": "eq.\(id.uuidString)"], ["spot": spot]) }
         await refreshTogether()
     }
@@ -427,32 +495,63 @@ final class SocialStore {
                 try await client.insert("plan_members", ["plan_id": plan.id.uuidString, "user_id": person.uuidString, "status": "invited"])
             }
         }
+        if ok { noteRecent(invitees) }
+        await refreshTogether()
+        await refreshChats()
+        return ok
+    }
+
+    /// The host changes the time, meal, or note. Everyone's answers stay, and they get a notification.
+    func updatePlan(_ plan: Plan, meal: Meal, startsAt: Date, note: String) async -> Bool {
+        let trimmed = note.trimmingCharacters(in: .whitespaces)
+        let ok = await run {
+            try await client.update("plans", where: ["id": "eq.\(plan.id.uuidString)"], [
+                "meal": meal.rawValue,
+                "starts_at": SupabaseClient.isoString(startsAt),
+                "note": trimmed.isEmpty ? NSNull() : trimmed as Any,
+            ])
+        }
         await refreshTogether()
         return ok
     }
 
-    func respond(_ plan: Plan, _ status: RSVP) async {
+    /// Answer a plan. Tapping the answer you already gave takes it back: an invite goes back to unanswered,
+    /// and on an open plan your answer is removed, as if you'd never seen it. `toggle: false` always sets it.
+    func respond(_ plan: Plan, _ status: RSVP, toggle: Bool = true) async {
         guard let id = myId else { return }
         let current = together.plans.first { $0.id == plan.id } ?? plan
-        if let me { replacePlan(plan.id, with: current.setting(status, for: me)) }
+        let row = ["plan_id": "eq.\(plan.id.uuidString)", "user_id": "eq.\(id.uuidString)"]
+        let takingBack = toggle && current.status(of: id) == status
+        if let me {
+            if !takingBack { replacePlan(plan.id, with: current.setting(status, for: me)) }
+            else if current.wasInvited(id) { replacePlan(plan.id, with: current.setting(.invited, for: me)) }
+            else { replacePlan(plan.id, with: current.removing(me)) }
+        }
         let ok = await run {
-            if current.status(of: id) == nil {
+            if takingBack {
+                if current.wasInvited(id) {
+                    try await client.update("plan_members", where: row, ["status": "invited", "updated_at": SupabaseClient.isoString(.now)])
+                } else {
+                    try await client.delete("plan_members", where: row)
+                }
+            } else if current.status(of: id) == nil {
                 try await client.insert("plan_members", ["plan_id": plan.id.uuidString, "user_id": id.uuidString, "status": status.rawValue])
             } else {
-                try await client.update("plan_members", where: ["plan_id": "eq.\(plan.id.uuidString)", "user_id": "eq.\(id.uuidString)"],
-                                        ["status": status.rawValue, "updated_at": SupabaseClient.isoString(.now)])
+                try await client.update("plan_members", where: row, ["status": status.rawValue, "updated_at": SupabaseClient.isoString(.now)])
             }
         }
         if !ok { replacePlan(plan.id, with: current) }
         await refreshTogether()
+        await refreshChats()
     }
 
     func invite(_ people: [UUID], to plan: Plan) async {
-        await run {
+        let ok = await run {
             for person in people {
                 try await client.insert("plan_members", ["plan_id": plan.id.uuidString, "user_id": person.uuidString, "status": "invited"])
             }
         }
+        if ok { noteRecent(people) }
         await refreshTogether()
     }
 
@@ -460,7 +559,7 @@ final class SocialStore {
     func hide(_ plan: Plan) async {
         let previous = plan.status(of: myId)
         setHidden(plan.id, true)
-        let declining = Task { await respond(plan, .declined) }
+        let declining = Task { await respond(plan, .declined, toggle: false) }
         toast = Toast(message: "Removed \(plan.host.firstName)'s plan", actionTitle: "Undo") { [weak self] in
             await declining.value
             guard let self, let id = self.myId else { return }
@@ -577,11 +676,11 @@ final class SocialStore {
         guard let id = myId else { return }
         setRelation(person, nil)
         if !blocked.contains(where: { $0.id == person.id }) { blocked.insert(person, at: 0) }
-        for kind in PostKind.allCases { feeds[kind]?.removeAll { $0.authorId == person.id } }
-        if bestToday?.authorId == person.id { bestToday = nil }
+        chats.removeAll { $0.kind == "dm" && $0.id == person.id }
         await run { try await client.insert("blocks", ["blocker": id.uuidString, "blocked": person.id.uuidString], upsert: true) }
         await refreshPeople()
         await refreshTogether()
+        await refreshChats()
     }
 
     func unblock(_ person: Person) async {
@@ -593,7 +692,22 @@ final class SocialStore {
         await refreshTogether()
     }
 
+    /// Close friends can be the only ones who see your going soon, and the only ones you hear about.
+    func setClose(_ person: Person, _ close: Bool) async {
+        guard let id = myId else { return }
+        if let i = people.firstIndex(where: { $0.id == person.id }) { people[i].close = close }
+        let ok = await run {
+            if close {
+                try await client.insert("close_friends", ["user_id": id.uuidString, "friend_id": person.id.uuidString], ignoreDuplicates: true)
+            } else {
+                try await client.delete("close_friends", where: ["user_id": "eq.\(id.uuidString)", "friend_id": "eq.\(person.id.uuidString)"])
+            }
+        }
+        if !ok, let i = people.firstIndex(where: { $0.id == person.id }) { people[i].close = !close }
+    }
+
     /// `groupId` is made by the new-group screen, so its preview shows the group's real initials color.
+    /// Everyone picked gets an invite; they're in once they accept.
     func createGroup(id groupId: UUID, name: String, photo: UIImage?, members: [UUID]) async -> Bool {
         guard let id = myId else { return false }
         let ok = await run {
@@ -610,7 +724,9 @@ final class SocialStore {
                 try await client.insert("group_members", ["group_id": groupId.uuidString, "user_id": member.uuidString])
             }
         }
+        if ok { noteRecent(members) }
         await refreshGroups()
+        await refreshChats()
         return ok
     }
 
@@ -639,12 +755,32 @@ final class SocialStore {
         return path.hasPrefix(id.uuidString.lowercased() + "/")
     }
 
+    /// Invites people to a group; each one is in once they accept.
     func add(_ members: [UUID], to group: SocialGroup) async {
-        await run {
+        let ok = await run {
             for member in members {
                 try await client.insert("group_members", ["group_id": group.id.uuidString, "user_id": member.uuidString])
             }
         }
+        if ok { noteRecent(members) }
+        await refreshGroups()
+    }
+
+    func acceptInvite(to group: SocialGroup) async {
+        guard let id = myId else { return }
+        await run {
+            try await client.update("group_members", where: ["group_id": "eq.\(group.id.uuidString)", "user_id": "eq.\(id.uuidString)"],
+                                    ["status": "joined"])
+        }
+        await refreshGroups()
+        await refreshTogether()
+        await refreshChats()
+    }
+
+    func declineInvite(to group: SocialGroup) async {
+        guard let id = myId else { return }
+        groups.removeAll { $0.id == group.id }
+        await run { try await client.delete("group_members", where: ["group_id": "eq.\(group.id.uuidString)", "user_id": "eq.\(id.uuidString)"]) }
         await refreshGroups()
     }
 
@@ -654,6 +790,7 @@ final class SocialStore {
         await run { try await client.delete("group_members", where: ["group_id": "eq.\(group.id.uuidString)", "user_id": "eq.\(id.uuidString)"]) }
         await refreshGroups()
         await refreshTogether()
+        await refreshChats()
     }
 
     // Owner only (the database enforces it too).
@@ -673,84 +810,111 @@ final class SocialStore {
         if ok, let photo = group.photoPath, isMine(photo) { try? await client.deletePhotos([photo]) }
         await refreshGroups()
         await refreshTogether()
+        await refreshChats()
     }
 
-    // MARK: Posts
+    // MARK: Chat
 
-    func post(kind: PostKind, body: String, meal: Meal?, dish: String?, image: UIImage?) async -> Bool {
-        guard let id = myId else { return false }
-        var uploaded: String?
-        let ok = await run {
-            var values: [String: Any] = ["kind": kind.rawValue, "body": body.trimmingCharacters(in: .whitespacesAndNewlines)]
-            if let meal { values["meal"] = meal.rawValue }
-            if let dish, !dish.isEmpty { values["dish"] = dish }
-            if let image, let jpeg = image.preparedForUpload() {
-                let path = "\(id.uuidString.lowercased())/\(UUID().uuidString.lowercased()).jpg"
-                try await client.upload(jpeg: jpeg, to: path)
-                uploaded = path
-                values["photo_path"] = path
-            }
-            try await client.insert("posts", values)
-        }
-        if ok {
-            await refreshFeed(kind, sort: feedSort)
-        } else if let uploaded {
-            try? await client.deletePhotos([uploaded])   // the post didn't go through, so don't leave its photo behind
-        }
-        return ok
-    }
-
-    func toggleVote(_ post: Post) async {
-        guard let id = myId else { return }
-        setVote(post.id, voted: !post.voted)
-        let ok = await run {
-            if post.voted {
-                try await client.delete("post_votes", where: ["post_id": "eq.\(post.id.uuidString)", "user_id": "eq.\(id.uuidString)"])
-            } else {
-                try await client.insert("post_votes", ["post_id": post.id.uuidString, "user_id": id.uuidString])
-            }
-        }
-        if !ok { setVote(post.id, voted: post.voted) }
-    }
-
-    private func setVote(_ postId: UUID, voted: Bool) {
-        for kind in PostKind.allCases {
-            guard let i = feeds[kind]?.firstIndex(where: { $0.id == postId }) else { continue }
-            let was = feeds[kind]![i].voted
-            feeds[kind]![i].voted = voted
-            feeds[kind]![i].votes += (voted ? 1 : 0) - (was ? 1 : 0)
-        }
-        if bestToday?.id == postId, let b = bestToday {
-            bestToday?.votes = b.votes + (voted ? 1 : 0) - (b.voted ? 1 : 0)
-            bestToday?.voted = voted
-        }
-    }
-
-    private func removeLocally(_ post: Post) {
-        for kind in PostKind.allCases { feeds[kind]?.removeAll { $0.id == post.id } }
-        if bestToday?.id == post.id { bestToday = nil }
-    }
-
-    /// Hides the post for you right away; three reports hide it for everyone until it's reviewed.
-    func report(_ post: Post, reason: String) async {
-        guard let id = myId else { return }
-        reportedPosts.insert(post.id)
-        UserDefaults.standard.set(reportedPosts.map(\.uuidString), forKey: "reportedPosts")
-        removeLocally(post)
-        toast = Toast(message: "Thanks. You won't see that post again.")
+    /// A chat's messages, oldest first. `newerThan` gets only what's new since the last look. Nil if it couldn't load.
+    func messages(in chat: ChatTarget, newerThan: Date? = nil, olderThan: Date? = nil) async -> [ChatMessage]? {
+        var out: [ChatMessage]?
+        var args: [String: Any] = ["kind": chat.kind, "target": chat.id.uuidString, "lim": 100]
+        if let newerThan { args["newer_than"] = SupabaseClient.preciseString(newerThan) }
+        if let olderThan { args["older_than"] = SupabaseClient.preciseString(olderThan) }
         await run(silent: true) {
-            try await client.insert("post_reports", ["post_id": post.id.uuidString, "reporter": id.uuidString, "reason": reason], upsert: true)
+            let rows: [ChatMessage] = try await client.rpc("chat_messages", args)
+            out = rows.reversed().filter { !reportedMessages.contains($0.id) }
+        }
+        return out
+    }
+
+    func send(_ text: String, to chat: ChatTarget) async -> ChatMessage? {
+        guard let id = myId else { return nil }
+        var values: [String: Any] = ["sender": id.uuidString, "body": text]
+        switch chat {
+        case .group(let g): values["group_id"] = g.uuidString
+        case .plan(let p): values["plan_id"] = p.uuidString
+        case .dm(let person): values["recipient"] = person.uuidString
+        }
+        var sent: ChatMessage?
+        let ok = await run {
+            let data = try await client.insert("messages", values, returning: true)
+            struct Row: Decodable { let id: UUID; let body: String; let createdAt: Date }
+            if let row = try SupabaseClient.decoder.decode([Row].self, from: data).first, let me {
+                sent = ChatMessage(id: row.id, body: row.body, createdAt: row.createdAt, sender: me)
+            }
+        }
+        if ok, case .dm(let person) = chat { noteRecent([person]) }
+        return sent
+    }
+
+    /// Clears the chat's unread count, here and on the server.
+    func markRead(_ chat: ChatTarget) async {
+        guard let id = myId else { return }
+        if let i = chats.firstIndex(where: { $0.target == chat }), chats[i].unread > 0 { chats[i].unread = 0 }
+        await run(silent: true) {
+            try await client.insert("chat_reads", ["user_id": id.uuidString, "thread": chat.key,
+                                                   "read_at": SupabaseClient.preciseString(.now)], upsert: true)
         }
     }
 
-    func delete(_ post: Post) async {
-        removeLocally(post)
-        let ok = await run { try await client.delete("posts", where: ["id": "eq.\(post.id.uuidString)"]) }
-        if ok, let path = post.photoPath { try? await client.deletePhotos([path]) }
-        if !ok { await refreshFeed(post.kind, sort: feedSort) }
+    func unsend(_ message: ChatMessage) async -> Bool {
+        await run { try await client.delete("messages", where: ["id": "eq.\(message.id.uuidString)"]) }
     }
 
-    func photoURL(_ post: Post) -> URL? { post.photoPath.map(client.publicURL) }
+    /// Hides the message for you right away and flags it for review.
+    func report(_ message: ChatMessage) async {
+        guard let id = myId else { return }
+        reportedMessages.insert(message.id)
+        UserDefaults.standard.set(reportedMessages.map(\.uuidString), forKey: "reportedMessages")
+        toast = Toast(message: "Thanks for reporting it. You won't see that message again.")
+        await run(silent: true) {
+            try await client.insert("message_reports", ["message_id": message.id.uuidString, "reporter": id.uuidString], ignoreDuplicates: true)
+        }
+    }
+
+    // MARK: Notifications
+
+    private(set) var notifySettings = NotifySettings()
+
+    func loadNotifySettings() async {
+        guard phase == .ready else { return }
+        await run(silent: true) {
+            let rows: [NotifySettings] = try await client.select("notify_settings", ["select": "going,arrivals,joins,plans,groups,messages"])
+            notifySettings = rows.first ?? NotifySettings()
+        }
+    }
+
+    func save(_ settings: NotifySettings) async {
+        guard let id = myId else { return }
+        let before = notifySettings
+        notifySettings = settings
+        let ok = await run {
+            try await client.insert("notify_settings", [
+                "user_id": id.uuidString, "going": settings.going.rawValue, "arrivals": settings.arrivals.rawValue,
+                "joins": settings.joins, "plans": settings.plans, "groups": settings.groups, "messages": settings.messages,
+                "updated_at": SupabaseClient.isoString(.now),
+            ], upsert: true)
+        }
+        if !ok { notifySettings = before }
+    }
+
+    /// iOS gave this phone a push token (it can change); the server needs it to reach you.
+    func setDeviceToken(_ token: String) async {
+        deviceToken = token
+        UserDefaults.standard.set(token, forKey: "deviceToken")
+        await registerDevice()
+    }
+
+    private func registerDevice() async {
+        guard phase == .ready, let token = deviceToken else { return }
+        #if DEBUG
+        let sandbox = true   // builds installed from Xcode get development push tokens
+        #else
+        let sandbox = false
+        #endif
+        await run(silent: true) { try await client.rpcVoid("register_device", ["device_token": token, "use_sandbox": sandbox]) }
+    }
 
     // MARK: Helpers
 
@@ -769,32 +933,21 @@ final class SocialStore {
             return false
         }
     }
-
-    /// A notification for each new invite, when the app is in the background (open, you see it on the Together tab).
-    private func notifyAboutNewInvites() {
-        let key = "seenInvites"
-        var seen = Set(UserDefaults.standard.stringArray(forKey: key) ?? [])
-        let open = UIApplication.shared.applicationState == .active
-        for plan in invites where !seen.contains(plan.id.uuidString) {
-            seen.insert(plan.id.uuidString)
-            if open { continue }
-            let content = UNMutableNotificationContent()
-            content.title = "\(plan.host.firstName) invited you to \(plan.mealKind?.title.lowercased() ?? "a meal")"
-            content.body = [plan.timeLabel, plan.note].compactMap { $0 }.joined(separator: " — ")
-            content.sound = .default
-            UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "invite|\(plan.id)", content: content, trigger: nil))
-        }
-        UserDefaults.standard.set(Array(seen), forKey: key)
-    }
 }
 
 extension Plan {
     /// The same plan with your RSVP changed, for showing it before the server answers.
     func setting(_ status: RSVP, for person: Person) -> Plan {
         var members = self.members.filter { $0.user.id != person.id }
-        members.append(PlanMember(user: person, status: status))
+        members.append(PlanMember(user: person, status: status, wasInvited: wasInvited(person.id)))
         return Plan(id: id, meal: meal, startsAt: startsAt, note: note, audience: audience, cancelled: cancelled,
                     group: group, host: host, members: members)
+    }
+
+    /// The same plan without your answer (taking back an answer on an open plan).
+    func removing(_ person: Person) -> Plan {
+        Plan(id: id, meal: meal, startsAt: startsAt, note: note, audience: audience, cancelled: cancelled,
+             group: group, host: host, members: members.filter { $0.user.id != person.id })
     }
 }
 
@@ -812,17 +965,6 @@ extension UIImage {
                             width: size.width * scale, height: size.height * scale))
         }
         return square.jpegData(compressionQuality: 0.8)
-    }
-
-    /// Longest side 1600 px, JPEG ~0.75, which keeps uploads well under the 5 MB storage limit.
-    func preparedForUpload() -> Data? {
-        let maxSide: CGFloat = 1600
-        let scale = min(1, maxSide / max(size.width, size.height))
-        let target = CGSize(width: size.width * scale, height: size.height * scale)
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1
-        let resized = UIGraphicsImageRenderer(size: target, format: format).image { _ in draw(in: CGRect(origin: .zero, size: target)) }
-        return resized.jpegData(compressionQuality: 0.75)
     }
 }
 

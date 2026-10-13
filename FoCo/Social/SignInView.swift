@@ -14,7 +14,8 @@ struct SignInGate<Content: View>: View {
         case .ready: content()
         case .loading: NavigationStack { ProfileLoadingView().toolbar { cancelButton } }
         case .needsProfile: NavigationStack { ProfileSetupView().toolbar { cancelButton } }
-        case .signedOut: NavigationStack { SignInView(reason: reason).toolbar { cancelButton } }
+        // In a sheet the keyboard comes up right away; on a tab it waits for a tap, so the bottom bar stays.
+        case .signedOut: NavigationStack { SignInView(reason: reason, autofocus: onCancel != nil).toolbar { cancelButton } }
         }
     }
 
@@ -63,6 +64,7 @@ private struct ProfileLoadingView: View {
 struct SignInView: View {
     @Environment(SocialStore.self) private var social
     let reason: String
+    var autofocus = true
     @State private var email = ""
     @State private var code = ""
     @State private var password = ""
@@ -175,6 +177,8 @@ struct SignInView: View {
         .navigationTitle("Sign in")
         .navigationBarTitleDisplayMode(.inline)
         .task(id: sentTo) {
+            // Always for the emailed code; for the NetID only when asked (not on a tab, where it would hide the bottom bar).
+            guard sentTo != nil || autofocus else { return }
             try? await Task.sleep(for: .milliseconds(350))
             focused = true
         }
@@ -226,7 +230,7 @@ struct ProfileSetupView: View {
 
             Section {
                 Toggle(isOn: $agreed) {
-                    Text("I'll keep it kind: no harassment, hate, nudity, or posting people without asking. Posts that break this get removed and accounts banned.")
+                    Text("I'll keep it kind: no harassment, hate, nudity, or posting people without asking. Messages that break this get removed and accounts banned.")
                         .font(.subheadline)
                 }
             } header: {
@@ -342,7 +346,7 @@ struct AvatarStack: View {
 
 struct DemoBanner: View {
     var body: some View {
-        Label("Local test server: these people and posts are made up so you can try things out.", systemImage: "testtube.2")
+        Label("Local test server: these people, plans, and messages are made up so you can try things out.", systemImage: "testtube.2")
             .font(.footnote)
             .foregroundStyle(.secondary)
     }

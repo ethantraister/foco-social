@@ -1,3 +1,4 @@
+import UserNotifications
 import SwiftUI
 
 struct MeView: View {
@@ -18,6 +19,12 @@ struct MeView: View {
                     NavigationLink { RequestsForm() } label: { Label("Food requests", systemImage: "hand.raised") }
                 }
 
+                if social.phase == .ready {
+                    Section {
+                        NavigationLink { NotificationSettingsView() } label: { Label("Notifications", systemImage: "bell.badge") }
+                    }
+                }
+
                 Section {
                     NavigationLink { AboutView() } label: { Label("About", systemImage: "info.circle") }
                 }
@@ -30,13 +37,13 @@ struct MeView: View {
                         }
                         .disabled(deleting)
                     } footer: {
-                        Text("Deleting removes your profile, posts, photos, plans, and friends for good.")
+                        Text("Deleting removes your profile, photos, plans, messages, and friends for good.")
                     }
                 }
             }
             .navigationTitle("Me")
             .sheet(isPresented: $editing) { EditProfileSheet() }
-            .sheet(isPresented: $signingIn) { SignInSheet(reason: "Sign in to eat with friends and post to the feed.") }
+            .sheet(isPresented: $signingIn) { SignInSheet(reason: "Sign in to see when friends are at FoCo, plan meals, and chat.") }
             // Both in the middle of the screen, laid out the same: a title, a line, and two short buttons side by side
             // (a long button label makes iOS stack them).
             .alert("Sign out?", isPresented: $confirmSignOut) {
@@ -55,7 +62,7 @@ struct MeView: View {
                     }
                 }
             } message: {
-                Text("Your profile, posts, photos, plans, and friends are removed for good. This can't be undone.")
+                Text("Your profile, photos, plans, messages, and friends are removed for good. This can't be undone.")
             }
         }
     }
@@ -237,8 +244,8 @@ struct CommunityRulesView: View {
         List {
             Section {
                 Text("Be kind. No harassment, hate, nudity, or photos of people without their OK.")
-                Text("Reported posts are hidden after three reports, and accounts that break the rules are removed.")
-                Text("Block anyone from the ••• menu on their post or from your friends list. Unblock them in About → Blocked people.")
+                Text("Report a message by pressing and holding it. Reported messages are reviewed, and accounts that break the rules are removed.")
+                Text("Block anyone by pressing and holding their message, or by swiping on them in your friends list. Unblock them in About → Blocked people.")
             }
         }
         .navigationTitle("Community rules")
@@ -289,21 +296,25 @@ struct PrivacyView: View {
             }
             Section("What you share, and who sees it") {
                 Text("Name, class year, and profile picture: other signed-in Dartmouth students, so they can find you.")
-                Text("Check-ins (at FoCo, which room, when you'll arrive): only your friends. They disappear on their own within 3 hours.")
-                Text("Meal plans: the friends, people, or group you post them to.")
-                Text("Plate photos and captions: signed-in Dartmouth students. Photos are stored at hard-to-guess web addresses; anyone with the exact address can open one.")
-                Text("Group name and photo: people in the group.")
+                Text("Check-ins (at FoCo, which side, when you'll arrive): your friends, or only your close friends if you pick that. They disappear on their own within 3 hours.")
+                Text("Meal plans: the friends, people, or group you post them to. Everyone invited to a plan can see who else is invited.")
+                Text("Messages: the friend you message, the people in the group, or the people in the meal plan. Messages stay until you unsend them or delete your account.")
+                Text("Your close friends list: only you.")
+                Text("Group name and photo: people in the group, and people invited to it.")
                 Text("Food requests: Dartmouth Dining gets one email a day with each food and how many students asked. Never names.")
-                Text("Blocking someone hides your posts, plans, and check-ins from each other.")
+                Text("Blocking someone hides your plans, check-ins, and messages from each other.")
             }
             Section("Location") {
                 Text("Only if you turn on automatic check-in. Your phone checks whether you're at FoCo; your location never leaves your phone, and friends only see that you're there.")
             }
+            Section("Notifications") {
+                Text("If you allow notifications, your phone's notification address is stored so friends' going soon, invites, and messages can reach you. Choose what you get in Me → Notifications.")
+            }
             Section("Where it's kept") {
-                Text("Accounts, posts, and photos are stored with Supabase, a hosted database service. Sign-in codes are emailed through Gmail.")
+                Text("Accounts, messages, and photos are stored with Supabase, a hosted database service. Notifications are delivered by Apple. Sign-in codes are emailed through Gmail.")
             }
             Section("Deleting") {
-                Text("Delete a post from its ••• menu. Me → Delete my account removes your profile, posts, photos, plans, check-ins, friends, and requests for good.")
+                Text("Unsend a message by pressing and holding it. Me → Delete my account removes your profile, photos, plans, check-ins, messages, friends, and requests for good.")
             }
             if let support = AppInfo.supportEmail {
                 Section("Questions") {
@@ -313,5 +324,80 @@ struct PrivacyView: View {
         }
         .navigationTitle("Privacy")
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+/// What you get notified about. Friends' going soon and arrivals can be everyone, close friends, or off.
+struct NotificationSettingsView: View {
+    @Environment(SocialStore.self) private var social
+    @Environment(\.openURL) private var openURL
+    @State private var settings = NotifySettings()
+    @State private var loaded = false
+    @State private var maybeReminders = MaybeReminders.enabled
+    @State private var allowed = true
+
+    var body: some View {
+        Form {
+            if !allowed {
+                Section {
+                    Button {
+                        openURL(URL(string: UIApplication.openSettingsURLString)!)
+                    } label: {
+                        Label("Notifications are off for FoCo Social. Tap to turn them on in Settings.", systemImage: "bell.slash")
+                    }
+                }
+            }
+
+            Section {
+                Picker(selection: $settings.going) {
+                    ForEach(NotifyScope.allCases) { Text($0.title).tag($0) }
+                } label: {
+                    Label("Friends going soon", systemImage: "figure.walk")
+                }
+                Picker(selection: $settings.arrivals) {
+                    ForEach(NotifyScope.allCases) { Text($0.title).tag($0) }
+                } label: {
+                    Label("Friends getting to FoCo", systemImage: "fork.knife")
+                }
+                Toggle(isOn: $settings.joins) { Label("Someone joins me", systemImage: "person.2") }
+            } header: {
+                Text("Friends")
+            } footer: {
+                Text("Going soon only notifies you when a friend chooses Notify friends. Close friends are the ones with a star in your friends list. “Someone joins me” is when a friend taps Me too, On my way, or Going on your plan.")
+            }
+
+            Section {
+                Toggle(isOn: $settings.plans) { Label("Meal invites and changes", systemImage: "calendar") }
+                Toggle(isOn: $settings.groups) { Label("Group invites and team meals", systemImage: "person.3") }
+                Toggle(isOn: $maybeReminders) { Label("Remind me 30 min before a Maybe", systemImage: "questionmark.circle") }
+            } header: {
+                Text("Plans and groups")
+            } footer: {
+                Text("The Maybe reminder lets you answer Going or Can't make it right from the notification.")
+            }
+
+            Section("Chats") {
+                Toggle(isOn: $settings.messages) { Label("Messages", systemImage: "bubble.left.and.bubble.right") }
+            }
+        }
+        .navigationTitle("Notifications")
+        .navigationBarTitleDisplayMode(.inline)
+        .disabled(!loaded)
+        .task {
+            let status = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+            allowed = status != .denied
+            await Push.registerIfAllowed(ask: true)
+            await social.loadNotifySettings()
+            settings = social.notifySettings
+            loaded = true
+        }
+        .onChange(of: settings) {
+            guard loaded, settings != social.notifySettings else { return }
+            Task { await social.save(settings) }
+        }
+        .onChange(of: maybeReminders) {
+            MaybeReminders.enabled = maybeReminders
+            MaybeReminders.schedule(for: social.together.plans.filter { $0.status(of: social.myId) == .maybe })
+        }
     }
 }

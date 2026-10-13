@@ -39,7 +39,8 @@ create function public.is_demo(u uuid) returns boolean language sql stable as $$
   select u::text like '00000000-0000-4000-a000-%';
 $$;
 
--- When a real person signs up: five demo friends, one incoming request, both groups.
+-- When a real person signs up: five demo friends, one incoming request, one group and an invite to another,
+-- and a message from Maya.
 create function public.demo_welcome() returns trigger
 language plpgsql security definer set search_path = public as $$
 begin
@@ -50,9 +51,11 @@ begin
                     'demo.sam@dartmouth.edu', 'demo.alex@dartmouth.edu');
   insert into friendships (requester, addressee, status)
   values ('00000000-0000-4000-a000-000000000008', new.id, 'pending');
-  insert into group_members (group_id, user_id) values
-    ('00000000-0000-4000-b000-000000000001', new.id),
-    ('00000000-0000-4000-b000-000000000002', new.id);
+  insert into group_members (group_id, user_id) values ('00000000-0000-4000-b000-000000000001', new.id);
+  insert into group_members (group_id, user_id, status, invited_by)
+  values ('00000000-0000-4000-b000-000000000002', new.id, 'invited', '00000000-0000-4000-a000-000000000003');
+  insert into messages (sender, recipient, body, created_at)
+  values ('00000000-0000-4000-a000-000000000001', new.id, 'hey! want to get dinner at FoCo later?', now() - interval '20 minutes');
   insert into plan_members (plan_id, user_id, status)
   select id, new.id, 'invited' from plans where id = '00000000-0000-4000-c000-000000000002';
   return new;
@@ -84,6 +87,17 @@ end $$;
 create trigger plan_members_demo_accept after insert on public.plan_members
   for each row execute function public.demo_accept_invite();
 
+create function public.demo_accept_group_invite() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if is_demo(new.user_id) and new.status = 'invited' then
+    update group_members set status = 'joined' where group_id = new.group_id and user_id = new.user_id;
+  end if;
+  return new;
+end $$;
+create trigger group_members_demo_accept after insert on public.group_members
+  for each row execute function public.demo_accept_group_invite();
+
 -- Rebuilds today's demo activity around the current time. Called when the dev server starts.
 create function public.dev_refresh_demo() returns void
 language plpgsql security definer set search_path = public as $$
@@ -97,6 +111,7 @@ begin
   delete from plans where host::text like '00000000-0000-4000-a000-%';
   delete from checkins where is_demo(user_id);
   delete from posts where is_demo(author);
+  delete from messages where is_demo(sender) and group_id is not null;
 
   next_lunch := ((case when local_now::time < '12:30' then today else today + 1 end) + time '12:30') at time zone 'America/New_York';
   next_dinner := ((case when local_now::time < '18:15' then today else today + 1 end) + time '18:15') at time zone 'America/New_York';
@@ -117,6 +132,13 @@ begin
     ('00000000-0000-4000-c000-000000000002', '00000000-0000-4000-a000-000000000005', 'going');
   insert into plan_members (plan_id, user_id, status)
   select '00000000-0000-4000-c000-000000000002', p.id, 'invited' from profiles p where not is_demo(p.id);
+
+  insert into messages (sender, group_id, body, created_at) values
+    ('00000000-0000-4000-a000-000000000002', '00000000-0000-4000-b000-000000000001', 'Team dinner tonight after practice, everyone in?', now() - interval '2 hours'),
+    ('00000000-0000-4000-a000-000000000004', '00000000-0000-4000-b000-000000000001', 'in', now() - interval '110 minutes'),
+    ('00000000-0000-4000-a000-000000000006', '00000000-0000-4000-b000-000000000001', 'Saving the big table on dark side', now() - interval '15 minutes');
+  insert into messages (sender, plan_id, body, created_at) values
+    ('00000000-0000-4000-a000-000000000005', '00000000-0000-4000-c000-000000000002', 'I''ll grab a table upstairs', now() - interval '30 minutes');
 
   insert into checkins (user_id, spot, open_to_join, started_at, expires_at) values
     ('00000000-0000-4000-a000-000000000004', 'Dark side', true, now() - interval '10 minutes', now() + interval '50 minutes'),

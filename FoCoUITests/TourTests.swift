@@ -55,6 +55,8 @@ final class TourTests: XCTestCase {
         app.buttons["Start eating"].tap()
         allowNotificationsIfAsked()
 
+        XCTAssertTrue(app.textFields["NetID"].waitForExistence(timeout: 5), "the app opens on Together")
+        tab("Menu")
         XCTAssertTrue(app.navigationBars["FoCo"].waitForExistence(timeout: 5))
         sleep(4)
         snap("menu-dinner")
@@ -83,11 +85,11 @@ final class TourTests: XCTestCase {
             snap("menu-saladbar")
         }
 
-        app.tabBars.buttons["Alerts"].tap()
+        tab("Alerts")
         sleep(3)
         snap("alerts")
 
-        app.tabBars.buttons["Me"].tap()
+        tab("Me")
         app.buttons["Food requests"].tap()
         sleep(1)
         snap("requests")
@@ -98,7 +100,7 @@ final class TourTests: XCTestCase {
         snap("diet")
         app.navigationBars.buttons.element(boundBy: 0).tap()
 
-        app.tabBars.buttons["Menu"].tap()
+        tab("Menu")
         let search = app.searchFields.firstMatch
         app.swipeDown()
         app.swipeDown()
@@ -110,6 +112,13 @@ final class TourTests: XCTestCase {
         }
     }
 
+    /// The app's own bottom bar; it opens on Together, so menu tests start by tapping Menu.
+    private func tab(_ name: String) {
+        let item = app.buttons["tab.\(name)"]
+        XCTAssertTrue(item.waitForExistence(timeout: 5), "\(name) tab")
+        item.tap()
+    }
+
     private func button(_ prefix: String) -> XCUIElement {
         app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", prefix)).firstMatch
     }
@@ -118,12 +127,13 @@ final class TourTests: XCTestCase {
         app.launchArguments = ["-resetForUITests", "-onboarded", "<true/>", "-meal", "dinner",
                                "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXL"]
         app.launch()
+        tab("Menu")
         XCTAssertTrue(app.navigationBars["FoCo"].waitForExistence(timeout: 5))
         sleep(4)
         snap("large-menu")
         app.swipeUp()
         snap("large-menu-scrolled")
-        app.tabBars.buttons["Me"].tap()
+        tab("Me")
         app.buttons["My diet"].tap()
         sleep(1)
         snap("large-diet")
@@ -132,10 +142,11 @@ final class TourTests: XCTestCase {
     func testAccessibilityAudit() throws {
         app.launchArguments = ["-resetForUITests", "-onboarded", "<true/>", "-meal", "dinner"]
         app.launch()
+        tab("Menu")
         XCTAssertTrue(app.navigationBars["FoCo"].waitForExistence(timeout: 5))
         sleep(4)
         for tab in ["Menu", "Alerts", "Me"] {
-            app.tabBars.buttons[tab].tap()
+            self.tab(tab)
             sleep(2)
             try app.performAccessibilityAudit(for: [.contrast, .elementDetection, .hitRegion, .sufficientElementDescription, .textClipped, .trait]) { issue in
                 print("A11Y[\(tab)] \(issue.auditType) — \(issue.compactDescription) — \(issue.element?.label ?? "?")")
@@ -149,6 +160,7 @@ final class TourTests: XCTestCase {
         defer { XCUIDevice.shared.appearance = .light }
         app.launchArguments = ["-resetForUITests", "-onboarded", "<true/>", "-meal", "lunch"]
         app.launch()
+        tab("Menu")
         XCTAssertTrue(app.navigationBars["FoCo"].waitForExistence(timeout: 5))
         sleep(4)
         snap("dark-menu")

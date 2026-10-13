@@ -11,7 +11,7 @@ final class MenuStore {
     private var freshWeeks: Set<String> = []
 
     private static var cacheURL: URL {
-        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("menus.v2.json")
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("menus.v3.json")
     }
 
     private init() {
@@ -141,7 +141,9 @@ final class Preferences {
     private init() {
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("-resetForUITests") {
-            for key in [Self.defaultsKey, "onboarded", "tab", "hiddenPlans"] { UserDefaults.standard.removeObject(forKey: key) }
+            for key in [Self.defaultsKey, "onboarded", "tab", "hiddenPlans", "goingLoud", "shareWith", "maybeReminders", "deviceToken"] {
+                UserDefaults.standard.removeObject(forKey: key)
+            }
         }
         #endif
         let s = UserDefaults.standard.data(forKey: Self.defaultsKey)

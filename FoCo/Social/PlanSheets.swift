@@ -1,19 +1,23 @@
 import SwiftUI
 
+/// Plan a meal, or (with `editing`) change one you're hosting. The meal follows from the time you pick,
+/// and times when FoCo is closed are turned away with a popup.
 struct PlanComposer: View {
     @Environment(SocialStore.self) private var social
     @Environment(\.dismiss) private var dismiss
+    var editing: Plan? = nil
     @State private var day = FoCoCalendar.startOfDay(.now)
-    @State private var meal = Meal.current
-    @State private var time = PlanComposer.defaultTime(for: Meal.current, on: FoCoCalendar.startOfDay(.now))
+    @State private var time = PlanComposer.defaultTime(on: FoCoCalendar.startOfDay(.now))
     @State private var audience = Audience.friends
     @State private var invitees: Set<UUID> = []
     @State private var group: UUID?
     @State private var note = ""
     @State private var working = false
+    @State private var closedAlert: Date?
 
-    static func defaultTime(for meal: Meal, on base: Date) -> Date {
-        let isToday = FoCoCalendar.cal.isDateInToday(base)
+    /// The next sensible time: the current meal's usual time if it's still ahead, else soon, on a quarter hour.
+    static func defaultTime(on base: Date) -> Date {
+        let meal = FoCoCalendar.cal.isDateInToday(base) ? Meal.current : .dinner
         let (h, m) = switch meal {
         case .breakfast: (8, 30)
         case .lunch: (12, 30)
@@ -21,7 +25,7 @@ struct PlanComposer: View {
         case .lateNight: (22, 0)
         }
         let suggested = FoCoCalendar.cal.date(bySettingHour: h, minute: m, second: 0, of: base) ?? base
-        if isToday && suggested < .now {
+        if FoCoCalendar.cal.isDateInToday(base) && suggested < .now {
             let next = Date.now.addingTimeInterval(15 * 60)
             let minute = FoCoCalendar.cal.component(.minute, from: next)
             return FoCoCalendar.cal.date(byAdding: .minute, value: (15 - minute % 15) % 15, to: next) ?? next
@@ -29,17 +33,21 @@ struct PlanComposer: View {
         return suggested
     }
 
+    /// The day you picked at the time you picked. Times after midnight belong to that night's Late Night.
     private var startsAt: Date {
         let c = FoCoCalendar.cal.dateComponents([.hour, .minute], from: time)
         var date = FoCoCalendar.cal.date(bySettingHour: c.hour ?? 12, minute: c.minute ?? 0, second: 0, of: day) ?? time
-        if meal == .lateNight && (c.hour ?? 0) < 3 { date = FoCoCalendar.adding(days: 1, to: date) }
+        if (c.hour ?? 0) < 3 { date = FoCoCalendar.adding(days: 1, to: date) }
         return date
     }
 
+    private var meal: Meal? { Meal.at(startsAt) }
+    private var isPast: Bool { startsAt < Date.now.addingTimeInterval(-30 * 60) }
+
     private var valid: Bool {
-        startsAt > Date.now.addingTimeInterval(-30 * 60)
-            && (audience != .invited || !invitees.isEmpty)
-            && (audience != .group || group != nil)
+        !isPast
+            && (editing != nil || audience != .invited || !invitees.isEmpty)
+            && (editing != nil || audience != .group || group != nil)
     }
 
     var body: some View {
@@ -48,47 +56,57 @@ struct PlanComposer: View {
                 Section("When") {
                     DayStrip(selection: $day)
                         .listRowInsets(EdgeInsets(top: 10, leading: 12, bottom: 6, trailing: 12))
-                    Picker("Meal", selection: $meal) {
-                        ForEach(Meal.allCases) { Text($0.title).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
                     DatePicker("Time", selection: $time, displayedComponents: .hourAndMinute)
                         .environment(\.timeZone, FoCoCalendar.tz)
-                    if startsAt < Date.now.addingTimeInterval(-30 * 60) {
+                    if isPast {
                         Text("That time has already passed.").font(.footnote).foregroundStyle(.red)
+                    } else if let meal {
+                        Label(meal.title, systemImage: meal.symbol)
+                            .foregroundStyle(.secondary)
+                            .accessibilityLabel("Meal: \(meal.title)")
+                    } else {
+                        Label("FoCo is closed then", systemImage: "moon.zzz")
+                            .font(.subheadline)
+                            .foregroundStyle(.red)
                     }
                 }
 
-                Section("Who can join") {
-                    Picker("Audience", selection: $audience) {
-                        ForEach(Audience.allCases) { Label($0.title, systemImage: $0.symbol).tag($0) }
-                    }
-                    .pickerStyle(.inline)
-                    .labelsHidden()
-                }
-
-                if audience == .invited {
-                    Section("Pick friends") {
-                        FriendPicker(friends: social.friends, selection: $invitees)
-                    }
-                } else if audience == .group {
-                    Section("Pick a group") {
-                        if social.groups.isEmpty {
-                            Text("You're not in any groups yet. Make one from Friends → New group.").foregroundStyle(.secondary)
+                if editing == nil {
+                    Section("Who can join") {
+                        Picker("Audience", selection: $audience) {
+                            ForEach(Audience.allCases) { Label($0.title, systemImage: $0.symbol).tag($0) }
                         }
-                        ForEach(social.groups) { g in
-                            Button {
-                                group = g.id
-                            } label: {
-                                HStack(spacing: 12) {
-                                    Avatar(groupId: g.id, name: g.name, photoPath: g.photoPath, size: 32)
-                                    Text(g.name).foregroundStyle(Color.primary)
-                                    Spacer()
-                                    Text("\(g.people.count)").foregroundStyle(.secondary)
-                                    if group == g.id { Image(systemName: "checkmark").foregroundStyle(.tint) }
-                                }
+                        .pickerStyle(.inline)
+                        .labelsHidden()
+                    }
+
+                    if audience == .invited {
+                        Section {
+                            FriendPicker(friends: social.recentFriends, selection: $invitees)
+                        } header: {
+                            Text("Pick friends")
+                        } footer: {
+                            Text("Friends you've eaten with or messaged lately are at the top.")
+                        }
+                    } else if audience == .group {
+                        Section("Pick a group") {
+                            if social.joinedGroups.isEmpty {
+                                Text("You're not in any groups yet. Make one from Friends → New group.").foregroundStyle(.secondary)
                             }
-                            .accessibilityAddTraits(group == g.id ? .isSelected : [])
+                            ForEach(social.joinedGroups) { g in
+                                Button {
+                                    group = g.id
+                                } label: {
+                                    HStack(spacing: 12) {
+                                        Avatar(groupId: g.id, name: g.name, photoPath: g.photoPath, size: 32)
+                                        Text(g.name).foregroundStyle(Color.primary)
+                                        Spacer()
+                                        Text("\(g.people.count)").foregroundStyle(.secondary)
+                                        if group == g.id { Image(systemName: "checkmark").foregroundStyle(.tint) }
+                                    }
+                                }
+                                .accessibilityAddTraits(group == g.id ? .isSelected : [])
+                            }
                         }
                     }
                 }
@@ -99,11 +117,18 @@ struct PlanComposer: View {
                     Text(footer)
                 }
             }
-            .navigationTitle("Plan a meal")
+            .navigationTitle(editing == nil ? "Plan a meal" : "Edit plan")
             .navigationBarTitleDisplayMode(.inline)
             .scrollDismissesKeyboard(.interactively)
-            .onChange(of: meal) { time = Self.defaultTime(for: meal, on: day) }
-            .onChange(of: day) { time = Self.defaultTime(for: meal, on: day) }
+            .onChange(of: day) { if editing == nil { time = Self.defaultTime(on: day) } }
+            .onAppear {
+                guard let plan = editing else { return }
+                time = plan.startsAt
+                // A 12:30 AM late-night plan belongs to the evening before.
+                let hour = FoCoCalendar.cal.component(.hour, from: plan.startsAt)
+                day = FoCoCalendar.startOfDay(hour < 3 ? FoCoCalendar.adding(days: -1, to: plan.startsAt) : plan.startsAt)
+                note = plan.note ?? ""
+            }
             .task {
                 if social.friends.isEmpty { await social.refreshPeople() }
             }
@@ -111,28 +136,36 @@ struct PlanComposer: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
+                        guard let meal else { closedAlert = startsAt; return }
                         Task {
                             working = true
-                            let ok = await social.createPlan(meal: meal, startsAt: startsAt, note: note, audience: audience,
+                            let ok: Bool
+                            if let plan = editing {
+                                ok = await social.updatePlan(plan, meal: meal, startsAt: startsAt, note: note)
+                            } else {
+                                ok = await social.createPlan(meal: meal, startsAt: startsAt, note: note, audience: audience,
                                                              group: audience == .group ? group : nil,
                                                              invitees: audience == .invited ? Array(invitees) : [])
+                            }
                             working = false
                             if ok { dismiss() }
                         }
                     } label: {
-                        if working { ProgressView() } else { Text("Post").bold() }
+                        if working { ProgressView() } else { Text(editing == nil ? "Post" : "Save").bold() }
                     }
                     .disabled(!valid || working)
                 }
             }
+            .closedAlert($closedAlert)
         }
     }
 
     private var footer: String {
+        if editing != nil { return "Everyone in the plan keeps their answer and gets a notification about the change." }
         switch audience {
-        case .friends: "All your friends will see this and can tap Going."
-        case .invited: "Only the people you pick will see it. They'll get a notification."
-        case .group: "Everyone in the group will see it."
+        case .friends: return "All your friends will see this and can tap Going."
+        case .invited: return "Only the people you pick will see it. They'll get a notification."
+        case .group: return "Everyone in the group will see it."
         }
     }
 }
@@ -146,12 +179,14 @@ struct CheckInSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var spot: String?
     @State private var minutes = 45
+    @State private var share = ShareWith.friends
+    @State private var closedAlert: Date?
     @Bindable private var presence = PresenceMonitor.shared
 
     var body: some View {
         NavigationStack {
             Form {
-                Section("Which room?") {
+                Section("Which side?") {
                     FlowLayout {
                         ForEach(FoCoRoom.all, id: \.self) { room in
                             Chip(title: room, selected: spot == room) { spot = spot == room ? nil : room }
@@ -167,8 +202,9 @@ struct CheckInSheet: View {
                 } header: {
                     Text("For about")
                 } footer: {
-                    Text("Only your friends can see this, and it disappears on its own after \(minutes) minutes.")
+                    Text("It disappears on its own after \(minutes) minutes.")
                 }
+                ShareWithPicker(share: $share)
                 Section {
                     Toggle("Check me in automatically", isOn: $presence.enabled)
                 } footer: {
@@ -186,6 +222,7 @@ struct CheckInSheet: View {
             .navigationTitle("I'm at FoCo")
             .navigationBarTitleDisplayMode(.inline)
             .onAppear {
+                share = social.defaultShare
                 if let mine = social.myCheckin {
                     spot = mine.spot.flatMap { FoCoRoom.all.contains($0) ? $0 : nil }
                 }
@@ -194,35 +231,110 @@ struct CheckInSheet: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Check in") {
-                        Task { await social.checkIn(spot: spot, minutes: minutes) }
+                        guard FoCoHours.isOpen(at: .now) else { closedAlert = .now; return }
+                        Task { await social.checkIn(spot: spot, minutes: minutes, share: share) }
                         dismiss()
                     }
                     .bold()
                 }
             }
+            .closedAlert($closedAlert)
         }
         .presentationDetents([.medium, .large])
     }
 }
 
+/// All friends or close friends, for one going soon or check-in.
+private struct ShareWithPicker: View {
+    @Environment(SocialStore.self) private var social
+    @Binding var share: ShareWith
+
+    var body: some View {
+        Section {
+            Picker("Who sees it", selection: $share) {
+                ForEach(ShareWith.allCases) { Text($0.title).tag($0) }
+            }
+            .pickerStyle(.segmented)
+        } header: {
+            Text("Who sees it")
+        } footer: {
+            if share == .close && social.closeFriends.isEmpty {
+                Text("You haven't picked any close friends yet. Tap the star next to a friend in Friends.")
+            } else if share == .close {
+                Text("Only your close friends: \(ListFormatter.localizedString(byJoining: social.closeFriends.map(\.firstName))).")
+            }
+        }
+    }
+}
+
+/// "I'll be at FoCo in…": 15 min, 30 min, 1 hour, or a time you pick, which side, who sees it,
+/// and whether friends get a notification (out loud) or just see it on Together (quiet).
 struct HeadingSheet: View {
     @Environment(SocialStore.self) private var social
     @Environment(\.dismiss) private var dismiss
-    @State private var minutes = 30
+    @State private var minutes: Int? = 30
+    @State private var customTime = Date.now.addingTimeInterval(45 * 60)
+    @State private var spot: String?
+    @State private var share = ShareWith.friends
+    @AppStorage("goingLoud") private var loud = false
+    @State private var closedAlert: Date?
+    @State private var tooLate = false
+
+    private static let options: [(Int, String)] = [(15, "15 min"), (30, "30 min"), (60, "1 hour")]
+
+    /// The time you picked, today (or just after midnight for Late Night).
+    private var eta: Date {
+        if let minutes { return Date.now.addingTimeInterval(Double(minutes) * 60) }
+        let c = FoCoCalendar.cal.dateComponents([.hour, .minute], from: customTime)
+        var date = FoCoCalendar.cal.date(bySettingHour: c.hour ?? 0, minute: c.minute ?? 0, second: 0, of: .now) ?? customTime
+        if date < Date.now.addingTimeInterval(-5 * 60) { date = FoCoCalendar.adding(days: 1, to: date) }
+        return date
+    }
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    Picker("In about", selection: $minutes) {
-                        ForEach([15, 30, 45, 60], id: \.self) { Text("\($0) min").tag($0) }
+                    FlowLayout {
+                        ForEach(Self.options, id: \.0) { option in
+                            Chip(title: option.1, selected: minutes == option.0) { minutes = option.0 }
+                        }
+                        Chip(title: "Custom", selected: minutes == nil, systemImage: "clock") { minutes = nil }
                     }
-                    .pickerStyle(.segmented)
+                    .padding(.vertical, 4)
+                    if minutes == nil {
+                        DatePicker("Time", selection: $customTime, displayedComponents: .hourAndMinute)
+                            .environment(\.timeZone, FoCoCalendar.tz)
+                    }
                 } header: {
-                    Text("I'll be at FoCo in about")
+                    Text("I'll be at FoCo in")
                 } footer: {
-                    Text("Friends see you're going around \(Date.now.addingTimeInterval(Double(minutes) * 60).formatted(date: .omitted, time: .shortened)) and can tap Me too. No plan, no group chat.")
+                    Text(FoCoHours.isOpen(at: eta)
+                         ? "Around \(eta.formatted(date: .omitted, time: .shortened)). Friends can tap Me too."
+                         : "FoCo is closed at \(eta.formatted(date: .omitted, time: .shortened)).")
                 }
+
+                Section("Which side?") {
+                    FlowLayout {
+                        ForEach(FoCoRoom.all, id: \.self) { room in
+                            Chip(title: room, selected: spot == room) { spot = spot == room ? nil : room }
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+
+                Section {
+                    Toggle(isOn: $loud) {
+                        Label("Notify friends", systemImage: loud ? "bell.and.waves.left.and.right" : "bell.slash")
+                    }
+                } footer: {
+                    Text(loud
+                         ? "Out loud: friends who want to know get a notification."
+                         : "Quiet: friends see it on Together, but nobody gets a notification.")
+                }
+
+                ShareWithPicker(share: $share)
+
                 if social.myHeading != nil {
                     Section {
                         Button("Not going anymore", role: .destructive) {
@@ -234,18 +346,31 @@ struct HeadingSheet: View {
             }
             .navigationTitle("Going soon")
             .navigationBarTitleDisplayMode(.inline)
+            .onAppear {
+                share = social.defaultShare
+                if let mine = social.myHeading { spot = mine.spot; share = mine.audience ?? share }
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Tell friends") {
-                        Task { await social.headOver(in: minutes) }
+                    Button(loud ? "Tell friends" : "Post") {
+                        let when = eta
+                        guard FoCoHours.isOpen(at: when) else { closedAlert = when; return }
+                        guard when < Date.now.addingTimeInterval(150 * 60) else { tooLate = true; return }
+                        Task { await social.headOver(at: when, spot: spot, share: share, notify: loud) }
                         dismiss()
                     }
                     .bold()
                 }
             }
+            .closedAlert($closedAlert)
+            .alert("That's a while from now", isPresented: $tooLate) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("Going soon is for the next couple of hours. For later, use Plan a meal.")
+            }
         }
-        .presentationDetents([.medium])
+        .presentationDetents([.large])
     }
 }
 
@@ -268,6 +393,7 @@ struct FriendsView: View {
                     ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
                 }
             }
+            .toastHost()
         }
     }
 
@@ -290,16 +416,13 @@ struct FriendsView: View {
             } else {
                 if !social.incoming.isEmpty {
                     Section("Friend requests") {
-                        ForEach(social.incoming) { person in
-                            PersonRow(person: person) {
-                                HStack {
-                                    Button("Accept") { Task { await social.accept(person) } }
-                                        .buttonStyle(.borderedProminent)
-                                    Button("Ignore") { Task { await social.removeFriend(person) } }
-                                        .buttonStyle(.bordered)
-                                }
-                            }
-                        }
+                        ForEach(social.incoming) { FriendRequestRow(person: $0) }
+                    }
+                }
+
+                if !social.groupInvites.isEmpty {
+                    Section("Group invites") {
+                        ForEach(social.groupInvites) { GroupInviteRow(group: $0) }
                     }
                 }
 
@@ -311,7 +434,7 @@ struct FriendsView: View {
                 }
 
                 Section {
-                    ForEach(social.groups) { group in
+                    ForEach(social.joinedGroups) { group in
                         NavigationLink {
                             GroupDetailView(groupId: group.id)
                         } label: {
@@ -328,19 +451,32 @@ struct FriendsView: View {
                 } header: {
                     Text("Groups and teams")
                 } footer: {
-                    Text("Plans posted to a group reach everyone in it.")
+                    Text("Each group has its own chat, and plans posted to a group reach everyone in it.")
                 }
 
-                Section("Friends (\(social.friends.count))") {
+                Section {
                     if social.friends.isEmpty {
                         Text("Search for people by name above to add them.").foregroundStyle(.secondary)
                     }
                     ForEach(social.friends) { person in
-                        PersonRow(person: person) { EmptyView() }
+                        PersonRow(person: person) { CloseFriendStar(person: person) }
                             .swipeActions {
                                 Button("Remove", role: .destructive) { Task { await social.removeFriend(person) } }
                                 Button("Block") { blocking = person }.tint(.gray)
                             }
+                            .swipeActions(edge: .leading) {
+                                NavigationLink { ChatView(target: .dm(person.id)) } label: { Label("Message", systemImage: "message") }
+                                    .tint(.dartmouthGreen)
+                            }
+                            .contextMenu {
+                                NavigationLink { ChatView(target: .dm(person.id)) } label: { Label("Message \(person.firstName)", systemImage: "message") }
+                            }
+                    }
+                } header: {
+                    Text("Friends (\(social.friends.count))")
+                } footer: {
+                    if !social.friends.isEmpty {
+                        Text("★ Close friends: you can share going soon with just them, and choose to only hear about them (Me → Notifications). Swipe right on a friend to message them.")
                     }
                 }
 
@@ -373,9 +509,8 @@ struct FriendsView: View {
                             titleVisibility: .visible, presenting: blocking) { person in
             Button("Block", role: .destructive) { Task { await social.block(person) } }
         } message: { _ in
-            Text("You won't see each other's posts, plans, or check-ins, and they'll be removed from your friends. You can unblock them from the Me tab.")
+            Text("You won't see each other's plans, check-ins, or messages, and they'll be removed from your friends. You can unblock them from Me → About.")
         }
-        .toastHost()
     }
 
     @ViewBuilder private func relationButton(_ person: Person) -> some View {
@@ -389,6 +524,59 @@ struct FriendsView: View {
     }
 }
 
+/// A friend request: who it's from on one line, then Accept and Decline side by side underneath.
+private struct FriendRequestRow: View {
+    @Environment(SocialStore.self) private var social
+    let person: Person
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                Avatar(person: person, size: 44)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(person.displayName).font(.headline).lineLimit(1)
+                    Text("Wants to be friends").font(.subheadline).foregroundStyle(.secondary)
+                }
+            }
+            .accessibilityElement(children: .combine)
+            HStack(spacing: 10) {
+                Button { Task { await social.accept(person) } } label: {
+                    Text("Accept").frame(maxWidth: .infinity, minHeight: 34)
+                }
+                .buttonStyle(.borderedProminent)
+                .accessibilityLabel("Accept \(person.firstName)")
+                Button { Task { await social.removeFriend(person) } } label: {
+                    Text("Decline").frame(maxWidth: .infinity, minHeight: 34)
+                }
+                .buttonStyle(.bordered)
+                .accessibilityLabel("Decline \(person.firstName)")
+            }
+            .font(.subheadline.weight(.semibold))
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+/// The star next to a friend: close friend or not.
+private struct CloseFriendStar: View {
+    @Environment(SocialStore.self) private var social
+    let person: Person
+
+    var body: some View {
+        let close = social.people.first { $0.id == person.id }?.isClose ?? person.isClose
+        Button { Task { await social.setClose(person, !close) } } label: {
+            Image(systemName: close ? "star.fill" : "star")
+                .font(.title3)
+                .foregroundStyle(close ? Color.orange : Color.secondary)
+                .frame(width: 44, height: 44)
+                .contentShape(.rect)
+        }
+        .buttonStyle(.borderless)
+        .accessibilityLabel(close ? "\(person.firstName) is a close friend" : "Make \(person.firstName) a close friend")
+        .sensoryFeedback(.selection, trigger: close)
+    }
+}
+
 struct PersonRow<Trailing: View>: View {
     let person: Person
     @ViewBuilder let trailing: () -> Trailing
@@ -396,14 +584,15 @@ struct PersonRow<Trailing: View>: View {
     var body: some View {
         HStack(spacing: 12) {
             Avatar(person: person, size: 40)
-            Text(person.displayName).font(.body)
-            Spacer()
-            trailing()
+            Text(person.displayName).font(.body).lineLimit(2)
+            Spacer(minLength: 8)
+            trailing().fixedSize()
         }
     }
 }
 
-/// Search every signed-up student by name. Groups (teams, clubs, floors) don't require being friends.
+/// Search every signed-up student by name, with your friends (most recent first) ready to add without searching.
+/// Groups (teams, clubs, floors) don't require being friends.
 struct MemberSearchPicker: View {
     @Environment(SocialStore.self) private var social
     @Binding var selection: [Person]
@@ -411,6 +600,8 @@ struct MemberSearchPicker: View {
     @State private var query = ""
     @State private var results: [Person] = []
     @State private var searching = false
+
+    private var searchingNow: Bool { query.trimmingCharacters(in: .whitespaces).count >= 2 }
 
     var body: some View {
         Section {
@@ -420,7 +611,7 @@ struct MemberSearchPicker: View {
             ForEach(results.filter { !excluded.contains($0.id) }) { person in
                 row(person)
             }
-            if query.trimmingCharacters(in: .whitespaces).count >= 2 && results.isEmpty {
+            if searchingNow && results.isEmpty {
                 if searching {
                     ProgressView().frame(maxWidth: .infinity)
                 } else {
@@ -430,7 +621,7 @@ struct MemberSearchPicker: View {
         } header: {
             Text("Add people")
         } footer: {
-            Text("Anyone on FoCo Social, not just friends. Group members see the group's meal plans, but only your friends see when you're at FoCo.")
+            Text("Anyone on FoCo Social, not just friends. They join once they accept. Group members see the group's plans and chat, but only your friends see when you're at FoCo.")
         }
         .task(id: query) {
             let q = query.trimmingCharacters(in: .whitespaces)
@@ -445,6 +636,13 @@ struct MemberSearchPicker: View {
         if !selection.isEmpty {
             Section("Adding") {
                 ForEach(selection) { row($0) }
+            }
+        }
+
+        let quick = social.recentFriends.filter { !excluded.contains($0.id) && !selection.contains($0) }
+        if !searchingNow && !quick.isEmpty {
+            Section("Your friends, most recent first") {
+                ForEach(quick) { row($0) }
             }
         }
     }
@@ -545,6 +743,20 @@ struct GroupDetailView: View {
                     }
                 }
                 .listRowBackground(Color.clear)
+                if !group.hasJoined(social.myId) {
+                    Section {
+                        GroupInviteRow(group: group)
+                    } footer: {
+                        Text("Join to see the group's meal plans and chat.")
+                    }
+                } else {
+                    Section {
+                        NavigationLink { ChatView(target: .group(group.id)) } label: {
+                            Label("Group chat", systemImage: "bubble.left.and.bubble.right")
+                                .badge(social.chats.first { $0.target == .group(group.id) }?.unread ?? 0)
+                        }
+                    }
+                }
                 Section("\(group.people.count) members") {
                     ForEach(group.people) { person in
                         PersonRow(person: person) {
@@ -571,16 +783,37 @@ struct GroupDetailView: View {
                         }
                     }
                 }
-                Section {
-                    Button { adding = true } label: { Label("Add people", systemImage: "person.badge.plus") }
-                } footer: {
-                    Text("Anyone in the group can add people.")
+                if !group.invited.isEmpty {
+                    Section {
+                        ForEach(group.invited) { person in
+                            PersonRow(person: person) {
+                                if iOwn {
+                                    Button("Cancel") { Task { await social.remove(person.id, from: group) } }
+                                        .buttonStyle(.bordered).controlSize(.small)
+                                        .accessibilityLabel("Cancel \(person.firstName)'s invite")
+                                } else {
+                                    Text("Invited").font(.caption).foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                    } header: {
+                        Text("Invited (\(group.invited.count))")
+                    } footer: {
+                        Text("They're in once they accept.")
+                    }
+                }
+                if group.hasJoined(social.myId) {
+                    Section {
+                        Button { adding = true } label: { Label("Invite people", systemImage: "person.badge.plus") }
+                    } footer: {
+                        Text("Anyone in the group can invite people. They join once they accept.")
+                    }
                 }
                 Section {
                     if iOwn {
                         Button("Delete group", role: .destructive) { confirmDelete = true }
                     } else {
-                        Button("Leave group", role: .destructive) { confirmLeave = true }
+                        if group.hasJoined(social.myId) { Button("Leave group", role: .destructive) { confirmLeave = true } }
                     }
                 } footer: {
                     if iOwn {
@@ -592,7 +825,7 @@ struct GroupDetailView: View {
         .confirmationDialog("Remove \(removing?.firstName ?? "")?", isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }), titleVisibility: .visible, presenting: removing) { person in
             Button("Remove", role: .destructive) { if let group { Task { await social.remove(person.id, from: group) } } }
         } message: { _ in
-            Text("They'll stop seeing the group's plans. Anyone in the group can add them back.")
+            Text("They'll stop seeing the group's plans and chat. Anyone in the group can invite them back.")
         }
         .confirmationDialog("Make \(newOwner?.firstName ?? "") the owner?", isPresented: Binding(get: { newOwner != nil }, set: { if !$0 { newOwner = nil } }), titleVisibility: .visible, presenting: newOwner) { person in
             Button("Make owner") { if let group { Task { await social.transfer(group, to: person.id) } } }
@@ -604,14 +837,14 @@ struct GroupDetailView: View {
                 if let group { Task { await social.leave(group) }; dismiss() }
             }
         } message: {
-            Text("You'll stop seeing its meal plans. Someone in the group can add you back.")
+            Text("You'll stop seeing its meal plans and chat. Someone in the group can invite you back.")
         }
         .confirmationDialog("Delete \(group?.name ?? "this group")?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Delete group", role: .destructive) {
                 if let group { Task { await social.delete(group) }; dismiss() }
             }
         } message: {
-            Text("This removes the group and its meal plans for everyone.")
+            Text("This removes the group, its meal plans, and its chat for everyone.")
         }
         .navigationTitle(group?.name ?? "Group")
         .task { await social.refreshPeople() }
@@ -630,15 +863,15 @@ struct GroupDetailView: View {
         .sheet(isPresented: $adding) {
             NavigationStack {
                 Form {
-                    MemberSearchPicker(selection: $selection, excluded: Set(group?.people.map(\.id) ?? []))
+                    MemberSearchPicker(selection: $selection, excluded: Set(group?.groupMembers.map(\.userId) ?? []))
                 }
-                .navigationTitle("Add to group")
+                .navigationTitle("Invite to group")
                 .navigationBarTitleDisplayMode(.inline)
                 .scrollDismissesKeyboard(.interactively)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button("Cancel") { adding = false } }
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("Add") {
+                        Button("Invite") {
                             Task {
                                 if let group { await social.add(selection.map(\.id), to: group) }
                                 selection = []

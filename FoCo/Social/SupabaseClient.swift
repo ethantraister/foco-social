@@ -99,6 +99,8 @@ final class SupabaseClient {
     }
 
     static func isoString(_ date: Date) -> String { plainFormatter.string(from: date) }
+    /// With milliseconds, for "messages newer than this one" (several can arrive in the same second).
+    static func preciseString(_ date: Date) -> String { fractionalFormatter.string(from: date) }
 
     init() {
         #if DEBUG
@@ -221,7 +223,7 @@ final class SupabaseClient {
         let raw = (obj?["message"] ?? obj?["msg"] ?? obj?["error_description"]) as? String ?? "Something went wrong (\(status))."
         if raw.contains("food_requests_once_a_day") { return "You already asked for that today." }
         if raw.contains("row-level security") && raw.contains("food_requests") { return "That's 10 requests today, the daily limit. Try again tomorrow." }
-        if raw.contains("row-level security") && raw.contains("\"posts\"") { return "That's 20 posts today, the daily limit. Try again tomorrow." }
+        if raw.contains("row-level security") && raw.contains("\"messages\"") { return "Couldn't send that. You may have left the chat, or you're sending too fast." }
         if raw.contains("Invalid login credentials") { return "That password didn't work." }
         if raw.contains("you can only request this after") || raw.contains("over_email_send_rate_limit") { return "A code was just sent. Wait a minute before asking for another." }
         if raw.contains("row-level security") { return "You don't have permission to do that." }
@@ -244,10 +246,13 @@ final class SupabaseClient {
         return try Self.decoder.decode([T].self, from: data)
     }
 
+    /// `upsert` updates a row that's already there; `ignoreDuplicates` leaves it alone (for tables you can't update).
     @discardableResult
-    func insert(_ table: String, _ values: [String: Any], upsert: Bool = false, returning: Bool = false) async throws -> Data {
+    func insert(_ table: String, _ values: [String: Any], upsert: Bool = false, ignoreDuplicates: Bool = false,
+                returning: Bool = false) async throws -> Data {
         var prefer = [returning ? "return=representation" : "return=minimal"]
         if upsert { prefer.append("resolution=merge-duplicates") }
+        if ignoreDuplicates { prefer.append("resolution=ignore-duplicates") }
         return try await send("POST", "/rest/v1/\(table)", json: values, prefer: prefer.joined(separator: ","))
     }
 

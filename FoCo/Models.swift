@@ -66,6 +66,9 @@ enum Meal: String, CaseIterable, Identifiable, Codable {
         return (meal, date.addingTimeInterval(Double(meal.endMinute - minutes) * 60))
     }
 
+    /// The meal FoCo serves at a time, or nil when it's closed (8:30–9:30 PM and 1:30–7:30 AM).
+    static func at(_ date: Date) -> Meal? { serving(at: date)?.meal }
+
     var isOverToday: Bool {
         let c = FoCoCalendar.cal.dateComponents([.hour, .minute], from: .now)
         let minutes = (c.hour ?? 0) * 60 + (c.minute ?? 0)
@@ -112,6 +115,8 @@ struct FoodItem: Identifiable, Hashable, Codable {
     let ingredients: String?
     let tags: Set<String>
     let isMain: Bool
+
+    var isDessert: Bool { FoodClassifier.isDessert(name: name, station: station) }
 
     /// Protein alone is 4 cal/g, so protein calories can't exceed total calories.
     var nutritionLooksWrong: Bool {
@@ -196,6 +201,25 @@ struct SearchHit: Identifiable, Hashable {
     let item: FoodItem
     var id: String { item.id }
     var date: Date { FoCoCalendar.date(from: day) ?? .now }
+}
+
+/// When FoCo is open: 7:30 AM to 8:30 PM, then Late Night 9:30 PM to 1:30 AM.
+enum FoCoHours {
+    static func isOpen(at date: Date) -> Bool { Meal.at(date) != nil }
+
+    /// "FoCo is closed at 9:00 PM" / "Late Night starts at 9:30 PM.", for the popup when you pick a closed time.
+    static func closedTitle(at date: Date) -> String {
+        "FoCo is closed at \(date.formatted(Date.FormatStyle(date: .omitted, time: .shortened, timeZone: FoCoCalendar.tz)))"
+    }
+
+    static func closedMessage(at date: Date) -> String {
+        let c = FoCoCalendar.cal.dateComponents([.hour, .minute], from: date)
+        let minutes = (c.hour ?? 0) * 60 + (c.minute ?? 0)
+        if minutes >= 20 * 60 + 30 && minutes < 21 * 60 + 30 {
+            return "Dinner ends at 8:30 PM and Late Night starts at 9:30 PM. Pick a time when FoCo is open."
+        }
+        return "FoCo is closed overnight, after Late Night ends at 1:30 AM. It opens at 7:30 AM."
+    }
 }
 
 enum FoCoCalendar {
