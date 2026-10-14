@@ -30,7 +30,7 @@ struct AlertsView: View {
                             .submitLabel(.done)
                             .onSubmit { add(draft) }
                         Button("Add") { add(draft) }
-                            .buttonStyle(.borderedProminent)
+                            .glassButton(prominent: true)
                             .disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty)
                     }
                     if !prefs.watches.isEmpty {
@@ -58,12 +58,12 @@ struct AlertsView: View {
                         .padding(.vertical, 4)
                     }
                 } header: {
-                    Text("Get alerted when a food is served")
+                    SectionTitle("Get alerted when a food is served")
                 } footer: {
                     Text("Foods you request are followed too. Alerts come at 8 PM the night before breakfast, 9 AM for lunch, 3 PM for dinner, and 7 PM for late night.")
                 }
 
-                Section("Coming up in the next 7 days") {
+                Section {
                     if prefs.alertKeywords.isEmpty {
                         Text("Add a food above and you'll see every time it's on the menu.").foregroundStyle(.secondary)
                     } else if matches.isEmpty {
@@ -84,9 +84,12 @@ struct AlertsView: View {
                             }
                         }
                     }
+                } header: {
+                    SectionTitle("Coming up in the next 7 days")
                 }
 
             }
+            .onBackdrop()
             .navigationTitle("Alerts")
             .task {
                 await store.loadUpcoming()

@@ -14,19 +14,21 @@ struct MeView: View {
             List {
                 account
 
-                Section("Food") {
-                    NavigationLink { DietForm() } label: { Label("My diet", systemImage: "leaf") }
-                    NavigationLink { RequestsForm() } label: { Label("Food requests", systemImage: "hand.raised") }
+                Section {
+                    NavigationLink { DietForm() } label: { Label("My diet", systemImage: "leaf").labelStyle(.tile(.teal)) }
+                    NavigationLink { RequestsForm() } label: { Label("Food requests", systemImage: "hand.raised").labelStyle(.tile(.orange)) }
+                } header: {
+                    SectionTitle("Food")
                 }
 
                 if social.phase == .ready {
                     Section {
-                        NavigationLink { NotificationSettingsView() } label: { Label("Notifications", systemImage: "bell.badge") }
+                        NavigationLink { NotificationSettingsView() } label: { Label("Notifications", systemImage: "bell.badge").labelStyle(.tile(.red)) }
                     }
                 }
 
                 Section {
-                    NavigationLink { AboutView() } label: { Label("About", systemImage: "info.circle") }
+                    NavigationLink { AboutView() } label: { Label("About", systemImage: "info").labelStyle(.tile(.gray)) }
                 }
 
                 if social.phase != .signedOut {
@@ -41,6 +43,7 @@ struct MeView: View {
                     }
                 }
             }
+            .onBackdrop()
             .navigationTitle("Me")
             .sheet(isPresented: $editing) { EditProfileSheet() }
             .sheet(isPresented: $signingIn) { SignInSheet(reason: "Sign in to see when friends are at FoCo, plan meals, and chat.") }
@@ -71,34 +74,44 @@ struct MeView: View {
         switch social.phase {
         case .ready:
             if let me = social.me {
+                // You, on the backdrop rather than in a card: big photo, name, and an Edit button.
                 Section {
-                    HStack(spacing: 14) {
-                        Avatar(person: me, size: 64)
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(me.name).font(.title2.bold())
-                            if let year = me.classYear { Text("Class of \(String(year))").font(.subheadline).foregroundStyle(.secondary) }
-                            if let email = social.email {
-                                Text(email).font(.caption).foregroundStyle(.secondary).lineLimit(1).minimumScaleFactor(0.8)
-                            }
-                        }
-                        Spacer()
-                        Button("Edit") { editing = true }.buttonStyle(.bordered)
+                    VStack(spacing: 6) {
+                        Avatar(person: me, size: 96)
+                            .padding(4)
+                            .background(Circle().fill(Color(uiColor: .systemBackground).opacity(0.6)))
+                            .padding(.bottom, 6)
+                        Text(me.name)
+                            .font(.system(.title, design: .serif).weight(.bold))
+                            .multilineTextAlignment(.center)
+                        Text([me.classYear.map { "Class of \(String($0))" }, social.email].compactMap { $0 }.joined(separator: " · "))
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                        Button("Edit profile") { editing = true }
+                            .glassButton()
+                            .controlSize(.regular)
+                            .padding(.top, 8)
+                            .accessibilityLabel("Edit")
                     }
-                    .padding(.vertical, 4)
+                    .frame(maxWidth: .infinity)
+                    .listRowBackground(Color.clear)
                 }
+                .listSectionSpacing(.compact)
             }
             Section {
                 NavigationLink {
                     FriendsView(embedded: true)
                 } label: {
-                    Label("Friends and groups", systemImage: "person.2")
+                    Label("Friends and groups", systemImage: "person.2").labelStyle(.tile(.indigo))
                         .badge(social.incoming.count)
                 }
                 InviteByTextButton {
-                    Label("Invite friends by text", systemImage: "message")
+                    Label("Invite friends by text", systemImage: "message").labelStyle(.tile(.green))
                 }
                 Toggle(isOn: Bindable(PresenceMonitor.shared).enabled) {
-                    Label("Check in automatically at FoCo", systemImage: "location")
+                    Label("Check in automatically at FoCo", systemImage: "location").labelStyle(.tile(.blue))
                 }
             } footer: {
                 Text("Friends see you're at FoCo when you walk in during a meal, and you're checked out when you leave.")
@@ -209,14 +222,14 @@ struct AboutView: View {
     var body: some View {
         List {
             Section {
-                NavigationLink { CommunityRulesView() } label: { Label("Community rules", systemImage: "checkmark.shield") }
+                NavigationLink { CommunityRulesView() } label: { Label("Community rules", systemImage: "checkmark.shield").labelStyle(.tile(.dartmouthDeep)) }
                 if social.phase == .ready {
-                    NavigationLink { BlockedPeopleView() } label: { Label("Blocked people", systemImage: "hand.raised.slash") }
+                    NavigationLink { BlockedPeopleView() } label: { Label("Blocked people", systemImage: "hand.raised.slash").labelStyle(.tile(.red)) }
                 }
-                NavigationLink { PrivacyView() } label: { Label("Privacy", systemImage: "lock") }
+                NavigationLink { PrivacyView() } label: { Label("Privacy", systemImage: "lock").labelStyle(.tile(.blue)) }
                 if let support = AppInfo.supportEmail {
                     Link(destination: support) {
-                        Label("Contact us", systemImage: "envelope")
+                        Label("Contact us", systemImage: "envelope").labelStyle(.tile(.cyan))
                     }
                 }
             }
@@ -225,7 +238,7 @@ struct AboutView: View {
                     LabeledContent {
                         Text("Local test server")
                     } label: {
-                        Label("Server", systemImage: "server.rack")
+                        Label("Server", systemImage: "server.rack").labelStyle(.tile(.gray))
                     }
                 }
             }
@@ -234,6 +247,7 @@ struct AboutView: View {
                 Text(AppInfo.versionLine).frame(maxWidth: .infinity)
             }
         }
+        .onBackdrop()
         .navigationTitle("About")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -248,6 +262,7 @@ struct CommunityRulesView: View {
                 Text("Block anyone by pressing and holding their message, or by swiping on them in your friends list. Unblock them in About → Blocked people.")
             }
         }
+        .onBackdrop()
         .navigationTitle("Community rules")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -269,10 +284,11 @@ struct BlockedPeopleView: View {
             ForEach(social.blocked) { person in
                 PersonRow(person: person) {
                     Button("Unblock") { Task { await social.unblock(person) } }
-                        .buttonStyle(.bordered)
+                        .glassButton()
                 }
             }
         }
+        .onBackdrop()
         .navigationTitle("Blocked people")
         .task {
             await social.refreshBlocked()
@@ -322,6 +338,7 @@ struct PrivacyView: View {
                 }
             }
         }
+        .onBackdrop()
         .navigationTitle("Privacy")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -352,14 +369,14 @@ struct NotificationSettingsView: View {
                 Picker(selection: $settings.going) {
                     ForEach(NotifyScope.allCases) { Text($0.title).tag($0) }
                 } label: {
-                    Label("Friends going soon", systemImage: "figure.walk")
+                    Label("Friends going soon", systemImage: "figure.walk").labelStyle(.tile(.dartmouthDeep))
                 }
                 Picker(selection: $settings.arrivals) {
                     ForEach(NotifyScope.allCases) { Text($0.title).tag($0) }
                 } label: {
-                    Label("Friends getting to FoCo", systemImage: "fork.knife")
+                    Label("Friends getting to FoCo", systemImage: "fork.knife").labelStyle(.tile(.orange))
                 }
-                Toggle(isOn: $settings.joins) { Label("Someone joins me", systemImage: "person.2") }
+                Toggle(isOn: $settings.joins) { Label("Someone joins me", systemImage: "person.2").labelStyle(.tile(.indigo)) }
             } header: {
                 Text("Friends")
             } footer: {
@@ -367,9 +384,9 @@ struct NotificationSettingsView: View {
             }
 
             Section {
-                Toggle(isOn: $settings.plans) { Label("Meal invites and changes", systemImage: "calendar") }
-                Toggle(isOn: $settings.groups) { Label("Group invites and team meals", systemImage: "person.3") }
-                Toggle(isOn: $maybeReminders) { Label("Remind me 30 min before a Maybe", systemImage: "questionmark.circle") }
+                Toggle(isOn: $settings.plans) { Label("Meal invites and changes", systemImage: "calendar").labelStyle(.tile(.red)) }
+                Toggle(isOn: $settings.groups) { Label("Group invites and team meals", systemImage: "person.3").labelStyle(.tile(.purple)) }
+                Toggle(isOn: $maybeReminders) { Label("Remind me 30 min before a Maybe", systemImage: "questionmark.circle").labelStyle(.tile(.yellow)) }
             } header: {
                 Text("Plans and groups")
             } footer: {
@@ -380,6 +397,7 @@ struct NotificationSettingsView: View {
                 Toggle(isOn: $settings.messages) { Label("Messages", systemImage: "bubble.left.and.bubble.right") }
             }
         }
+        .onBackdrop()
         .navigationTitle("Notifications")
         .navigationBarTitleDisplayMode(.inline)
         .disabled(!loaded)

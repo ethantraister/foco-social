@@ -76,13 +76,33 @@ struct ContentView: View {
             Tab("Me", systemImage: "person.crop.circle", value: AppTab.me.rawValue) { MeView().tabContent() }
         }
         .overlay(alignment: .bottom) {
-            VStack(spacing: 6) {
-                // "Plan cancelled · Undo" and other notes, just above the bottom bar on every tab.
-                if let toast = social.toast { ToastBar(toast: toast).padding(.bottom, bar.visible ? 0 : 64) }
-                if bar.visible {
-                    FoCoTabBar(selection: $tab, chatsBadge: social.unreadMessages, togetherBadge: social.togetherBadge)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+            GeometryReader { geo in
+                let bottom = geo.safeAreaInsets.bottom
+                ZStack(alignment: .bottom) {
+                    // Like the system's scroll edge effect: what scrolls under the bar fades, so the bar stays readable.
+                    if bar.visible {
+                        // Only as tall as the bar's own space, so rows above the bar aren't washed out.
+                        LinearGradient(stops: [.init(color: Color(uiColor: .systemGroupedBackground).opacity(0), location: 0),
+                                               .init(color: Color(uiColor: .systemGroupedBackground).opacity(0.7), location: 0.5),
+                                               .init(color: Color(uiColor: .systemGroupedBackground).opacity(0.9), location: 1)],
+                                       startPoint: .top, endPoint: .bottom)
+                            .frame(height: TabBarState.height + bottom + 8)
+                            .allowsHitTesting(false)
+                            .transition(.opacity)
+                    }
+                    VStack(spacing: 8) {
+                        // "Plan cancelled · Undo" and other notes, just above the bottom bar on every tab.
+                        if let toast = social.toast { ToastBar(toast: toast).padding(.bottom, bar.visible ? 0 : 64) }
+                        if bar.visible {
+                            FoCoTabBar(selection: $tab, chatsBadge: social.unreadMessages, togetherBadge: social.togetherBadge)
+                                .transition(.move(edge: .bottom).combined(with: .opacity))
+                        }
+                    }
+                    // The bar floats a little into the home-indicator area, like the system's.
+                    .padding(.bottom, bottom > 0 ? max(bottom - 14, 6) : 8)
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                .ignoresSafeArea(edges: .bottom)
             }
         }
         .animation(.snappy(duration: 0.2), value: bar.visible)

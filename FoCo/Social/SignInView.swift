@@ -51,7 +51,7 @@ private struct ProfileLoadingView: View {
                     Text("Check your connection and try again.")
                 } actions: {
                     Button("Try again") { Task { await social.bootstrap() } }
-                        .buttonStyle(.borderedProminent)
+                        .glassButton(prominent: true)
                 }
             } else {
                 ProgressView()
@@ -174,6 +174,7 @@ struct SignInView: View {
                 }
             }
         }
+        .onBackdrop()
         .navigationTitle("Sign in")
         .navigationBarTitleDisplayMode(.inline)
         .task(id: sentTo) {
@@ -251,7 +252,7 @@ struct ProfileSetupView: View {
                     }
                     .frame(maxWidth: .infinity, minHeight: 44)
                 }
-                .buttonStyle(.borderedProminent)
+                .glassButton(prominent: true)
                 .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || !agreed || working)
                 .listRowInsets(EdgeInsets())
                 .listRowBackground(Color.clear)
@@ -262,6 +263,7 @@ struct ProfileSetupView: View {
             }
         }
         .scrollDismissesKeyboard(.interactively)
+        .onBackdrop()
         .navigationTitle("Set up your profile")
     }
 }

@@ -5,7 +5,7 @@ import SwiftUI
 @MainActor @Observable
 final class TabBarState {
     static let shared = TabBarState()
-    static let height: CGFloat = 58
+    static let height: CGFloat = 62
 
     var keyboardUp = false
     private var hiders = 0
@@ -15,50 +15,72 @@ final class TabBarState {
     func show() { hiders = max(0, hiders - 1) }
 }
 
-/// The bottom bar: four tabs, with Together raised in the middle in Dartmouth Green (like Venmo's Pay/Request).
+/// The bottom bar: a floating Liquid Glass capsule with four tabs, and Together raised in the middle as a
+/// Dartmouth Green glass button (like Venmo's Pay/Request). Both are one glass group, so where the button
+/// meets the bar they flow into each other.
 struct FoCoTabBar: View {
     @Binding var selection: Int
     let chatsBadge: Int
     let togetherBadge: Int
+    @Namespace private var selectionSpace
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: 0) {
-            item(.menu, "Menu", "fork.knife", "fork.knife")
-            item(.chats, "Chats", "bubble.left.and.bubble.right", "bubble.left.and.bubble.right.fill", badge: chatsBadge)
-            together
-            item(.alerts, "Alerts", "bell", "bell.fill")
-            item(.me, "Me", "person.crop.circle", "person.crop.circle.fill")
+        GlassGroup(spacing: 14) {
+            ZStack(alignment: .top) {
+                HStack(spacing: 0) {
+                    item(.menu, "Menu", "fork.knife", "fork.knife")
+                    item(.chats, "Chats", "bubble.left.and.bubble.right", "bubble.left.and.bubble.right.fill", badge: chatsBadge)
+                    Color.clear.frame(width: 84)
+                    item(.alerts, "Alerts", "bell", "bell.fill")
+                    item(.me, "Me", "person.crop.circle", "person.crop.circle.fill")
+                }
+                .padding(.horizontal, 6)
+                .frame(height: TabBarState.height)
+                .glass(in: Capsule())
+                together
+            }
         }
-        .padding(.horizontal, 4)
-        .frame(minHeight: TabBarState.height)
-        // Solid, so labels stay readable over whatever scrolls behind (and like Venmo's).
-        .background {
-            Rectangle()
-                .fill(Color(uiColor: .systemBackground))
-                .overlay(alignment: .top) { Divider() }
-                .shadow(color: .black.opacity(0.04), radius: 6, y: -2)
-                .ignoresSafeArea(edges: .bottom)
+        // Drawn above the glass layer (inside the glass group it ended up underneath, and vanished).
+        .overlay(alignment: .bottom) {
+            Text("Together")
+                .font(.system(size: 10.5, weight: .bold))
+                .lineLimit(1)
+                .fixedSize()
+                .foregroundStyle(selection == AppTab.together.rawValue ? Color.accentColor : Color.primary)
+                .padding(.bottom, 8)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
         }
+        .padding(.horizontal, 14)
         .dynamicTypeSize(...DynamicTypeSize.xxLarge)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Tab bar")
         .accessibilityIdentifier("tabBar")
+        .animation(.snappy(duration: 0.28), value: selection)
     }
 
     private func item(_ tab: AppTab, _ title: String, _ icon: String, _ selectedIcon: String, badge: Int = 0) -> some View {
         let selected = selection == tab.rawValue
         return Button { selection = tab.rawValue } label: {
-            VStack(spacing: 3) {
+            VStack(spacing: 2) {
                 Image(systemName: selected ? selectedIcon : icon)
-                    .font(.system(size: 21, weight: selected ? .semibold : .regular))
-                    .frame(height: 26)
+                    .font(.system(size: 19, weight: selected ? .semibold : .regular))
+                    .frame(height: 24)
                     .overlay(alignment: .topTrailing) { Badge(count: badge).offset(x: 12, y: -6) }
-                Text(title).font(.caption2.weight(selected ? .semibold : .medium)).lineLimit(1).fixedSize()
+                Text(title).font(.system(size: 10.5, weight: selected ? .semibold : .medium)).lineLimit(1).fixedSize()
             }
-            .foregroundStyle(selected ? Color.dartmouthGreen : Color.primary.opacity(0.7))
+            .foregroundStyle(selected ? Color.accentColor : Color.primary.opacity(0.88))
             .frame(maxWidth: .infinity)
-            .padding(.bottom, 4)
-            .contentShape(.rect)
+            .frame(height: TabBarState.height - 12)
+            .background {
+                // The selected tab sits in a soft pill that slides across, like the system bar's.
+                if selected {
+                    Capsule()
+                        .fill(Color.primary.opacity(0.07))
+                        .matchedGeometryEffect(id: "selected", in: selectionSpace)
+                }
+            }
+            .contentShape(.capsule)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(title)
@@ -70,44 +92,22 @@ struct FoCoTabBar: View {
     private var together: some View {
         let selected = selection == AppTab.together.rawValue
         return Button { selection = AppTab.together.rawValue } label: {
-            VStack(spacing: 2) {
-                ZStack {
-                    Circle()
-                        .fill(Color(red: 0, green: 0x69 / 255, blue: 0x3e / 255).gradient)
-                        .overlay(Circle().strokeBorder(Color(uiColor: .systemBackground), lineWidth: 4))
-                        .shadow(color: .black.opacity(selected ? 0.25 : 0.15), radius: selected ? 8 : 5, y: 3)
-                    Image(systemName: "person.2.fill")
-                        .font(.system(size: 24, weight: .semibold))
-                        .foregroundStyle(.white)
-                }
-                .frame(width: 66, height: 66)
-                .overlay(alignment: .topTrailing) { Badge(count: togetherBadge).offset(x: -2, y: 4) }
-                .offset(y: -14)
-                .padding(.bottom, -14)
-                Text("Together")
-                    .font(.caption.weight(.bold))
-                    .lineLimit(1)
-                    .fixedSize()
-                    .foregroundStyle(selected ? Color.dartmouthGreen : Color.primary)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.bottom, 4)
-            .contentShape(.rect)
+            Image(systemName: "person.2.fill")
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 56, height: 56)
+                .glass(in: Circle(), tint: .dartmouthDeep, interactive: true)
+                .overlay(alignment: .topTrailing) { Badge(count: togetherBadge).offset(x: 2, y: -2) }
+                .offset(y: -27)
+                .frame(width: 84, height: TabBarState.height, alignment: .top)
+                .contentShape(.rect)
         }
-        .buttonStyle(TogetherButtonStyle())
+        .buttonStyle(.plain)
         .accessibilityLabel("Together")
         .accessibilityIdentifier("tab.Together")
         .accessibilityValue(togetherBadge > 0 ? "\(togetherBadge) new" : "")
         .accessibilityAddTraits(selected ? .isSelected : [])
         .sensoryFeedback(.selection, trigger: selected)
-    }
-}
-
-private struct TogetherButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.94 : 1)
-            .animation(.snappy(duration: 0.15), value: configuration.isPressed)
     }
 }
 
@@ -120,7 +120,7 @@ private struct Badge: View {
                 .foregroundStyle(.white)
                 .padding(.horizontal, 5)
                 .frame(minWidth: 18, minHeight: 18)
-                .background(.red, in: .capsule)
+                .background(Color(red: 0.84, green: 0.13, blue: 0.12), in: .capsule)   // a deeper red, so white numbers stay readable on glass
                 .accessibilityHidden(true)
         }
     }
@@ -134,7 +134,7 @@ private struct TabContent: ViewModifier {
     func body(content: Content) -> some View {
         content
             .toolbar(.hidden, for: .tabBar)
-            .contentMargins(.bottom, bar.visible ? TabBarState.height + 12 : 0, for: .automatic)
+            .contentMargins(.bottom, bar.visible ? TabBarState.height + 20 : 0, for: .automatic)
     }
 }
 

@@ -484,13 +484,14 @@ struct FriendsView: View {
                     Section("Requests you sent") {
                         ForEach(social.outgoing) { person in
                             PersonRow(person: person) {
-                                Button("Cancel") { Task { await social.removeFriend(person) } }.buttonStyle(.bordered)
+                                Button("Cancel") { Task { await social.removeFriend(person) } }.glassButton()
                             }
                         }
                     }
                 }
             }
         }
+        .onBackdrop()
         .navigationTitle("Friends")
         .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Find people by name")
         .textInputAutocapitalization(.never)
@@ -518,8 +519,8 @@ struct FriendsView: View {
         switch relation {
         case "friend": Label("Friends", systemImage: "checkmark").font(.subheadline).foregroundStyle(.secondary)
         case "outgoing": Text("Requested").font(.subheadline).foregroundStyle(.secondary)
-        case "incoming": Button("Accept") { Task { await social.accept(person) } }.buttonStyle(.borderedProminent)
-        default: Button("Add") { Task { await social.addFriend(person) } }.buttonStyle(.borderedProminent)
+        case "incoming": Button("Accept") { Task { await social.accept(person) } }.glassButton(prominent: true)
+        default: Button("Add") { Task { await social.addFriend(person) } }.glassButton(prominent: true)
         }
     }
 }
@@ -543,12 +544,12 @@ private struct FriendRequestRow: View {
                 Button { Task { await social.accept(person) } } label: {
                     Text("Accept").frame(maxWidth: .infinity, minHeight: 34)
                 }
-                .buttonStyle(.borderedProminent)
+                .glassButton(prominent: true)
                 .accessibilityLabel("Accept \(person.firstName)")
                 Button { Task { await social.removeFriend(person) } } label: {
                     Text("Decline").frame(maxWidth: .infinity, minHeight: 34)
                 }
-                .buttonStyle(.bordered)
+                .glassButton()
                 .accessibilityLabel("Decline \(person.firstName)")
             }
             .font(.subheadline.weight(.semibold))
@@ -789,7 +790,7 @@ struct GroupDetailView: View {
                             PersonRow(person: person) {
                                 if iOwn {
                                     Button("Cancel") { Task { await social.remove(person.id, from: group) } }
-                                        .buttonStyle(.bordered).controlSize(.small)
+                                        .glassButton().controlSize(.small)
                                         .accessibilityLabel("Cancel \(person.firstName)'s invite")
                                 } else {
                                     Text("Invited").font(.caption).foregroundStyle(.secondary)
@@ -846,6 +847,7 @@ struct GroupDetailView: View {
         } message: {
             Text("This removes the group, its meal plans, and its chat for everyone.")
         }
+        .onBackdrop()
         .navigationTitle(group?.name ?? "Group")
         .task { await social.refreshPeople() }
         // The owner's photo changes save right away (there's no Save button on this page).
@@ -902,10 +904,10 @@ struct FriendButton: View {
                 Text("Requested").font(.caption).foregroundStyle(.secondary)
             case "incoming":
                 Button("Accept") { Task { await social.accept(person) } }
-                    .buttonStyle(.borderedProminent).controlSize(.small)
+                    .glassButton(prominent: true).controlSize(.small)
             default:
                 Button("Add friend") { Task { await social.addFriend(person) } }
-                    .buttonStyle(.bordered).controlSize(.small)
+                    .glassButton().controlSize(.small)
                     .accessibilityLabel("Add \(person.firstName) as a friend")
             }
         }

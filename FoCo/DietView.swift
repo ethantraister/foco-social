@@ -45,6 +45,7 @@ struct DietForm: View {
                     Button("Run setup again") { onboarded = false }
                 }
             }
+            .onBackdrop()
             .navigationTitle("My Diet")
     }
 }

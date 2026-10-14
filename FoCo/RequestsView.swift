@@ -65,7 +65,7 @@ struct RequestsForm: View {
                                     Label("You asked", systemImage: "checkmark").font(.caption.weight(.semibold)).foregroundStyle(.tint)
                                 } else {
                                     Button("Me too") { Task { await send(r.food, meal: nil, note: "") } }
-                                        .buttonStyle(.bordered)
+                                        .glassButton()
                                         .accessibilityHint("Adds your request for \(r.food)")
                                 }
                             }
@@ -92,6 +92,7 @@ struct RequestsForm: View {
                 }
             }
         }
+        .onBackdrop()
         .navigationTitle("Requests")
         .sheet(isPresented: $signingIn) { SignInSheet(reason: "Sign in with your NetID to send food requests to Dining.") }
         .task {

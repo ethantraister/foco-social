@@ -76,12 +76,15 @@ struct MenuView: View {
 
     private var menuList: some View {
         List {
+            // Day and meal float on the backdrop, not in a card: they're controls, so they're glass.
             Section {
                 DayStrip(selection: $date)
-                    .listRowInsets(EdgeInsets(top: 10, leading: 12, bottom: 6, trailing: 12))
+                    .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 10, trailing: 0))
                 mealPicker
+                    .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 6, trailing: 16))
             }
             .listRowSeparator(.hidden)
+            .listRowBackground(Color.clear)
 
             if let social = friendsLine {
                 Section {
@@ -104,6 +107,7 @@ struct MenuView: View {
             content
         }
         .listStyle(.insetGrouped)
+        .onBackdrop()
         .refreshable { await store.load(date: date, meal: meal, force: true) }
         .task(id: "\(date)\(meal)") { await store.load(date: date, meal: meal) }
         .sensoryFeedback(.selection, trigger: meal)
@@ -147,7 +151,7 @@ struct MenuView: View {
             }
             if !typeSize.isAccessibilitySize { Spacer() }
             Button(prefs.filtersPaused ? "Use my diet" : "Show all") { prefs.filtersPaused.toggle() }
-                .buttonStyle(.bordered)
+                .glassButton()
                 .controlSize(typeSize.isAccessibilitySize ? .regular : .small)
                 .fixedSize()
         }
@@ -161,7 +165,9 @@ struct MenuView: View {
                         .listRowInsets(EdgeInsets(top: 12, leading: 0, bottom: 12, trailing: 0))
                 } header: {
                     Label("Desserts \(FoCoCalendar.phrase(date))", systemImage: "birthday.cake.fill")
+                        .font(.system(.title3, design: .serif).weight(.bold))
                         .foregroundStyle(Color.dessert)
+                        .textCase(nil)
                 }
             }
 
@@ -188,7 +194,7 @@ struct MenuView: View {
                         moreGroup("More from \(station.name)", items: station.more, key: station.name)
                     }
                 } header: {
-                    Text(station.name)
+                    SectionTitle(station.name)
                 } footer: {
                     if station.id == withMains.first?.id { Text("Swipe right on any dish to get an alert next time it's served.") }
                 }
@@ -196,10 +202,12 @@ struct MenuView: View {
 
             let sidesOnly = stations.filter { $0.mains.isEmpty && !$0.more.isEmpty }
             if !sidesOnly.isEmpty {
-                Section("Sides, salads, and more") {
+                Section {
                     ForEach(sidesOnly) { station in
                         stationGroup(station.name, subtitle: preview(station.more), items: station.more)
                     }
+                } header: {
+                    SectionTitle("Sides, salads, and more")
                 }
             }
 
@@ -223,7 +231,7 @@ struct MenuView: View {
                     Text(error)
                 } actions: {
                     Button("Try again") { Task { await store.load(date: date, meal: meal, force: true) } }
-                        .buttonStyle(.borderedProminent)
+                        .glassButton(prominent: true)
                 }
             }
         } else {
@@ -353,27 +361,35 @@ struct SearchResultsView: View {
 struct DayStrip: View {
     @Binding var selection: Date
     @ScaledMetric(relativeTo: .title3) private var size: CGFloat = 54
+    @Namespace private var glassSpace
     private let days = (0..<7).map { FoCoCalendar.adding(days: $0, to: FoCoCalendar.startOfDay(.now)) }
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(days, id: \.self) { day in
-                    let selected = FoCoCalendar.cal.isDate(day, inSameDayAs: selection)
-                    Button { selection = day } label: {
-                        VStack(spacing: 2) {
-                            Text(label(day)).font(.caption.weight(.semibold))
-                            Text(day.formatted(Date.FormatStyle(timeZone: FoCoCalendar.tz).day())).font(.title3.weight(.bold))
+            GlassGroup(spacing: 8) {
+                HStack(spacing: 8) {
+                    ForEach(days, id: \.self) { day in
+                        let selected = FoCoCalendar.cal.isDate(day, inSameDayAs: selection)
+                        Button { withAnimation(.snappy) { selection = day } } label: {
+                            VStack(spacing: 1) {
+                                Text(label(day)).font(.caption.weight(.semibold))
+                                Text(day.formatted(Date.FormatStyle(timeZone: FoCoCalendar.tz).day()))
+                                    .font(.title3.weight(.bold).monospacedDigit())
+                            }
+                            .frame(minWidth: size, minHeight: size)
+                            .padding(.horizontal, 4)
+                            .foregroundStyle(selected ? Color.white : Color.primary)
+                            .glass(in: .rect(cornerRadius: 18), tint: selected ? .dartmouthDeep : nil, interactive: true)
+                            .glassID(day, in: glassSpace)
+                            .contentShape(.rect(cornerRadius: 18))
                         }
-                        .frame(minWidth: size, minHeight: size)
-                        .padding(.horizontal, 4)
-                        .background(selected ? Color.dartmouthGreen : Color.secondary.opacity(0.12), in: .rect(cornerRadius: 12))
-                        .foregroundStyle(selected ? Color(uiColor: .systemBackground) : Color.primary)
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(FoCoCalendar.relativeName(day) + ", " + day.formatted(Date.FormatStyle(timeZone: FoCoCalendar.tz).month(.wide).day()))
+                        .accessibilityAddTraits(selected ? .isSelected : [])
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(FoCoCalendar.relativeName(day) + ", " + day.formatted(Date.FormatStyle(timeZone: FoCoCalendar.tz).month(.wide).day()))
-                    .accessibilityAddTraits(selected ? .isSelected : [])
                 }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 4)
             }
         }
         .noTabBarMargin()
@@ -386,7 +402,9 @@ struct DayStrip: View {
 
 extension Color {
     /// The dessert highlight: a warm raspberry, so desserts stand out from the green.
-    static let dessert = Color(red: 0.80, green: 0.22, blue: 0.42)
+    static let dessert = Color(UIColor { $0.userInterfaceStyle == .dark
+        ? UIColor(red: 0.95, green: 0.42, blue: 0.58, alpha: 1)
+        : UIColor(red: 0.70, green: 0.13, blue: 0.34, alpha: 1) })
 }
 
 /// Desserts as big cards you scroll sideways through, at the top of the menu.
@@ -400,26 +418,22 @@ private struct DessertStrip: View {
             HStack(alignment: .top, spacing: 10) {
                 ForEach(items) { item in
                     NavigationLink(value: FoodRoute(item: item, date: date, meal: meal)) {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Image(systemName: "birthday.cake")
-                                .font(.title3)
-                                .foregroundStyle(Color.dessert)
+                        VStack(alignment: .leading, spacing: 4) {
                             Spacer(minLength: 0)
                             Text(item.name)
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(Color.primary)
+                                .font(.headline)
+                                .foregroundStyle(.white)
                                 .multilineTextAlignment(.leading)
                                 .fixedSize(horizontal: false, vertical: true)
                             if let cal = item.calories {
-                                Text("\(Int(cal)) cal").font(.caption).foregroundStyle(.secondary)
+                                Text("\(Int(cal)) cal").font(.caption.weight(.medium)).foregroundStyle(.white.opacity(0.8))
                             }
                         }
-                        .padding(12)
+                        .padding(14)
                         // Every card as tall as the tallest, so long names wrap instead of being cut off.
-                        .frame(width: 150, alignment: .topLeading)
-                        .frame(minHeight: 120, maxHeight: .infinity, alignment: .topLeading)
-                        .background(Color.dessert.opacity(0.1), in: .rect(cornerRadius: 16))
-                        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Color.dessert.opacity(0.25)))
+                        .frame(width: 156, alignment: .bottomLeading)
+                        .frame(minHeight: 128, maxHeight: .infinity, alignment: .bottomLeading)
+                        .background(DessertCardFill(seed: item.name), in: .rect(cornerRadius: 22))
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(item.accessibilitySummary)
@@ -430,5 +444,24 @@ private struct DessertStrip: View {
             .fixedSize(horizontal: false, vertical: true)
         }
         .noTabBarMargin()
+    }
+}
+
+/// Each dessert card gets its own warm color (raspberry, berry, caramel, plum…), always the same for the same dessert.
+private struct DessertCardFill: ShapeStyle {
+    let seed: String
+    // Dark enough at both ends for white text.
+    private static let pairs: [(Color, Color)] = [
+        (Color(red: 0.62, green: 0.12, blue: 0.30), Color(red: 0.80, green: 0.27, blue: 0.33)),
+        (Color(red: 0.45, green: 0.13, blue: 0.38), Color(red: 0.66, green: 0.22, blue: 0.45)),
+        (Color(red: 0.52, green: 0.25, blue: 0.08), Color(red: 0.70, green: 0.38, blue: 0.13)),
+        (Color(red: 0.33, green: 0.16, blue: 0.46), Color(red: 0.55, green: 0.27, blue: 0.56)),
+        (Color(red: 0.58, green: 0.16, blue: 0.16), Color(red: 0.76, green: 0.33, blue: 0.24)),
+    ]
+
+    func resolve(in environment: EnvironmentValues) -> LinearGradient {
+        let index = seed.unicodeScalars.reduce(0) { ($0 &* 31 &+ Int($1.value)) & 0xFFFF } % Self.pairs.count
+        let (a, b) = Self.pairs[index]
+        return LinearGradient(colors: [b, a], startPoint: .topTrailing, endPoint: .bottomLeading)
     }
 }

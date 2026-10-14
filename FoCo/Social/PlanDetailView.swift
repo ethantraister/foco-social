@@ -19,7 +19,7 @@ struct PlanDetailView: View {
                 ContentUnavailableView {
                     Label("Couldn't load this plan", systemImage: "calendar.badge.exclamationmark")
                 } actions: {
-                    Button("Try again") { Task { await social.refreshTogether() } }.buttonStyle(.bordered)
+                    Button("Try again") { Task { await social.refreshTogether() } }.glassButton()
                 }
             } else if !social.loadedTogether {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -39,40 +39,51 @@ struct PlanDetailView: View {
         let status = plan.status(of: me)
         let inChat = isHost || [.going, .maybe, .invited].contains(status)
         return List {
+            // The plan itself, on the backdrop: who it's with, when, the note, and your answer.
             Section {
-                HStack(alignment: .top, spacing: 14) {
-                    if let group = plan.group {
-                        Avatar(groupId: group.id, name: group.name, photoPath: group.photoPath, size: 56)
-                    } else {
-                        Avatar(person: plan.host, size: 56)
+                VStack(spacing: 6) {
+                    Group {
+                        if let group = plan.group {
+                            Avatar(groupId: group.id, name: group.name, photoPath: group.photoPath, size: 72)
+                        } else {
+                            Avatar(person: plan.host, size: 72)
+                        }
                     }
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(plan.title(me: me)).font(.title3.bold())
-                        Label(plan.timeLabel, systemImage: plan.mealKind?.symbol ?? "clock")
-                            .font(.subheadline).foregroundStyle(.secondary)
+                    .padding(.bottom, 6)
+                    VStack(spacing: 4) {
+                        Text(plan.title(me: me))
+                            .font(.system(.title2, design: .serif).weight(.bold))
+                            .multilineTextAlignment(.center)
+                        Text(plan.timeLabel).font(.headline).foregroundStyle(.tint)
                         Text(isHost ? "You're hosting" : "Hosted by \(plan.host.firstName)")
                             .font(.subheadline).foregroundStyle(.secondary)
                     }
+                    .accessibilityElement(children: .combine)
+                    if let note = plan.note, !note.isEmpty {
+                        Text("“\(note)”")
+                            .font(.callout)
+                            .multilineTextAlignment(.center)
+                            .padding(.top, 6)
+                    }
+                    if !isHost {
+                        RSVPRow(plan: plan, status: status)
+                            .padding(.top, 14)
+                        Text(status == nil || status == .invited ? "Let \(plan.host.firstName) know if you're coming." : "Tap your answer again to take it back.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .padding(.top, 2)
+                    }
                 }
-                .padding(.vertical, 4)
-                .accessibilityElement(children: .combine)
-                if let note = plan.note, !note.isEmpty {
-                    Text("“\(note)”")
-                }
-            }
-
-            if !isHost {
-                Section {
-                    RSVPRow(plan: plan, status: status)
-                } footer: {
-                    Text(status == nil || status == .invited ? "Let \(plan.host.firstName) know if you're coming." : "Tap your answer again to take it back.")
-                }
+                .frame(maxWidth: .infinity)
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 8, trailing: 20))
             }
 
             Section {
                 if inChat {
                     NavigationLink { ChatView(target: .plan(plan.id)) } label: {
                         Label("Plan chat", systemImage: "bubble.left.and.bubble.right")
+                            .labelStyle(.tile(.dartmouthDeep))
                             .badge(social.chats.first { $0.target == .plan(plan.id) }?.unread ?? 0)
                     }
                 } else {
@@ -103,6 +114,7 @@ struct PlanDetailView: View {
                 }
             }
         }
+        .onBackdrop()
         .refreshable { await social.refreshTogether() }
         .sheet(isPresented: $editing) { PlanComposer(editing: plan) }
         .sheet(isPresented: $inviting) { InviteFriendsSheet(plan: plan) }
@@ -110,10 +122,12 @@ struct PlanDetailView: View {
 
     @ViewBuilder private func peopleSection(_ title: String, _ people: [Person]) -> some View {
         if !people.isEmpty {
-            Section("\(title) (\(people.count))") {
+            Section {
                 ForEach(people) { person in
                     PersonRow(person: person) { FriendButton(person: person) }
                 }
+            } header: {
+                SectionTitle("\(title) (\(people.count))")
             }
         }
     }

@@ -39,7 +39,7 @@ struct OnboardingView: View {
                 HStack(spacing: 6) {
                     ForEach(0..<steps, id: \.self) { i in
                         Capsule()
-                            .fill(i == step ? Color.dartmouthGreen : Color.secondary.opacity(0.3))
+                            .fill(i == step ? Color.dartmouthDeep : Color.secondary.opacity(0.3))
                             .frame(width: i == step ? 22 : 8, height: 8)
                     }
                 }
@@ -53,10 +53,11 @@ struct OnboardingView: View {
                         .font(.headline)
                         .frame(maxWidth: .infinity, minHeight: 50)
                 }
-                .buttonStyle(.borderedProminent)
+                .glassButton(prominent: true)
             }
             .padding(24)
         }
+        .background { Backdrop() }
         .interactiveDismissDisabled()
     }
 
@@ -107,7 +108,7 @@ struct OnboardingView: View {
 
     private func title(_ t: String, _ subtitle: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(t).font(.largeTitle.bold()).fixedSize(horizontal: false, vertical: true)
+            Text(t).font(.system(.largeTitle, design: .serif).weight(.bold)).fixedSize(horizontal: false, vertical: true)
             Text(subtitle).foregroundStyle(.secondary)
         }
     }

@@ -20,7 +20,7 @@ struct ChatsView: View {
                         } description: {
                             Text("Message a friend, or chat with a group or the people in a meal plan.")
                         } actions: {
-                            Button("New message") { newMessage = true }.buttonStyle(.borderedProminent)
+                            Button("New message") { newMessage = true }.glassButton(prominent: true)
                         }
                         .listRowBackground(Color.clear)
                     } else if social.chatsFailed && !social.isOffline {
@@ -29,7 +29,7 @@ struct ChatsView: View {
                         } description: {
                             Text("Something went wrong on our end. Try again in a minute.")
                         } actions: {
-                            Button("Try again") { Task { await social.refreshChats() } }.buttonStyle(.bordered)
+                            Button("Try again") { Task { await social.refreshChats() } }.glassButton()
                         }
                         .listRowBackground(Color.clear)
                     } else if !social.isOffline {
@@ -40,6 +40,7 @@ struct ChatsView: View {
                     NavigationLink(value: thread.target) { ChatRow(thread: thread) }
                 }
             }
+            .onBackdrop()
             .navigationTitle("Chats")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -97,7 +98,7 @@ private struct ChatRow: View {
                             .foregroundStyle(.white)
                             .padding(.horizontal, 7)
                             .frame(minHeight: 20)
-                            .background(Color.dartmouthGreen, in: .capsule)
+                            .background(Color.dartmouthDeep, in: .capsule)
                             .accessibilityLabel("\(thread.unread) unread")
                     }
                 }
@@ -327,26 +328,33 @@ struct ChatView: View {
         }
     }
 
+    /// The message box and send button float on glass at the bottom; messages scroll underneath.
     private var composer: some View {
-        HStack(alignment: .bottom, spacing: 8) {
-            TextField("Message", text: $draft, axis: .vertical)
-                .lineLimit(1...5)
-                .focused($typing)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 9)
-                .background(Color(uiColor: .secondarySystemBackground), in: .rect(cornerRadius: 20))
-            Button { Task { await send() } } label: {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 32))
-                    .foregroundStyle(canSend ? Color.dartmouthGreen : Color.secondary.opacity(0.5))
+        GlassGroup(spacing: 8) {
+            HStack(alignment: .bottom, spacing: 8) {
+                TextField("Message", text: $draft, axis: .vertical)
+                    .lineLimit(1...5)
+                    .focused($typing)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 11)
+                    .glass(in: .rect(cornerRadius: 22))
+                Button { Task { await send() } } label: {
+                    Image(systemName: "arrow.up")
+                        .font(.system(size: 17, weight: .bold))
+                        .foregroundStyle(canSend ? Color.white : Color.secondary)
+                        .frame(width: 44, height: 44)
+                        .glass(in: Circle(), tint: canSend ? .dartmouthDeep : nil, interactive: true)
+                }
+                .buttonStyle(.plain)
+                .disabled(!canSend)
+                .accessibilityLabel("Send")
+                .accessibilityIdentifier("sendMessage")
             }
-            .disabled(!canSend)
-            .accessibilityLabel("Send")
-            .accessibilityIdentifier("sendMessage")
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(.bar)
+        .padding(.top, 6)
+        .padding(.bottom, 8)
+        .animation(.snappy(duration: 0.2), value: canSend)
     }
 
     private var canSend: Bool { !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !sending }
@@ -437,7 +445,7 @@ private struct MessageBubble: View {
                     .padding(.horizontal, 13)
                     .padding(.vertical, 8)
                     .foregroundStyle(mine ? .white : Color.primary)
-                    .background(mine ? Color(red: 0, green: 0x69 / 255, blue: 0x3e / 255) : Color(uiColor: .secondarySystemBackground),
+                    .background(mine ? Color.dartmouthDeep : Color(uiColor: .secondarySystemBackground),
                                 in: .rect(cornerRadius: 18))
                     .contextMenu {
                         Button { UIPasteboard.general.string = message.body } label: { Label("Copy", systemImage: "doc.on.doc") }

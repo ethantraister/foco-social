@@ -14,10 +14,18 @@ enum Theme {
     static func apply() {
         let forest = UIColor(named: "ForestGreen") ?? .label
         let title = UIColor { $0.userInterfaceStyle == .dark ? .white : forest }
-        UINavigationBar.appearance().largeTitleTextAttributes = [.foregroundColor: title]
-        UINavigationBar.appearance().titleTextAttributes = [.foregroundColor: title]
+        // Page titles in New York, Apple's serif: a collegiate touch on top of SF everywhere else.
+        UINavigationBar.appearance().largeTitleTextAttributes = [.foregroundColor: title, .font: serif(34, .bold, .largeTitle)]
+        UINavigationBar.appearance().titleTextAttributes = [.foregroundColor: title, .font: serif(18, .semibold, .headline)]
         // UIKit pieces (alerts, menus) take the window's tint.
         UIWindow.appearance().tintColor = UIColor(named: "AccentColor")
+    }
+
+    /// The serif at a size that still follows the reader's text size.
+    private static func serif(_ size: CGFloat, _ weight: UIFont.Weight, _ style: UIFont.TextStyle) -> UIFont {
+        let base = UIFont.systemFont(ofSize: size, weight: weight)
+        let font = base.fontDescriptor.withDesign(.serif).map { UIFont(descriptor: $0, size: size) } ?? base
+        return UIFontMetrics(forTextStyle: style).scaledFont(for: font)
     }
 }
 
@@ -38,7 +46,7 @@ struct BrandHeader: View {
             }
             .frame(width: 52, height: 52)
             .accessibilityHidden(true)
-            Text(title).font(.title.bold()).fixedSize(horizontal: false, vertical: true)
+            Text(title).font(.system(.title, design: .serif).weight(.bold)).fixedSize(horizontal: false, vertical: true)
             Text(subtitle).opacity(0.85)
         }
         .foregroundStyle(Color.snow)

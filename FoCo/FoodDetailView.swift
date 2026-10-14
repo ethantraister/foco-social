@@ -16,7 +16,7 @@ struct FoodDetailView: View {
         List {
             Section {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(item.name).font(.title2.bold())
+                    Text(item.name).font(.system(.title2, design: .serif).weight(.bold))
                     Label("\(item.station) · \(route.meal.title) \(FoCoCalendar.phrase(route.date))", systemImage: route.meal.symbol)
                         .foregroundStyle(.secondary)
                     if !item.diets.isEmpty {
@@ -102,6 +102,7 @@ struct FoodDetailView: View {
                 }
             }
         }
+        .onBackdrop()
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $signingIn) { SignInSheet(reason: "Sign in with your NetID to send food requests to Dining.") }
         .onChange(of: social.phase) {

@@ -179,9 +179,9 @@ struct Chip: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 9)
             .frame(minHeight: 44)
-            .background(background, in: .capsule)
-            .overlay { if excludes && selected { Capsule().strokeBorder(Color.red.opacity(0.6)) } }
             .foregroundStyle(foreground)
+            .glass(tint: tint, interactive: true)
+            .contentShape(.capsule)
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(selected ? .isSelected : [])
@@ -189,15 +189,12 @@ struct Chip: View {
         .sensoryFeedback(.selection, trigger: selected)
     }
 
-    private var background: Color {
-        guard selected else { return Color.secondary.opacity(0.12) }
-        return excludes ? Color.red.opacity(0.12) : Color.dartmouthGreen
+    private var tint: Color? {
+        guard selected else { return nil }
+        return excludes ? Color.red.opacity(0.85) : .dartmouthDeep
     }
 
-    private var foreground: Color {
-        guard selected else { return .primary }
-        return excludes ? .red : Color(uiColor: .systemBackground)   // snow white in light mode; dark text on the lighter dark-mode green
-    }
+    private var foreground: Color { selected ? .white : .primary }
 }
 
 enum Suggestions {

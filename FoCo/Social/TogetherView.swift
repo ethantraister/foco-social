@@ -14,37 +14,39 @@ struct TogetherView: View {
     var body: some View {
         NavigationStack {
             List {
-                if social.isLocalDemo {
-                    Section { DemoBanner() }
-                }
-
                 if social.isOffline {
                     Section { OfflineNote() }
-                }
-
-                if !social.invites.isEmpty || !social.groupInvites.isEmpty {
-                    Section("Invites for you") {
-                        ForEach(social.groupInvites) { GroupInviteRow(group: $0) }
-                        ForEach(social.invites) { plan in
-                            PlanCard(plan: plan, prominent: true) { openPlan = plan.id }
-                        }
-                    }
                 }
 
                 Section {
                     // Checking in is automatic, so the two things you do by hand lead the screen.
                     let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(spacing: 10)) : AnyLayout(HStackLayout(spacing: 10))
                     layout {
-                        Button { showHeading = true } label: {
-                            ActionTile(title: social.myHeading == nil ? "Going soon" : "Change time", icon: "figure.walk")
-                        }
-                        Button { showPlan = true } label: {
-                            ActionTile(title: "Plan a meal", icon: "calendar.badge.plus")
-                        }
+                            Button { showHeading = true } label: {
+                                ActionTile(title: social.myHeading == nil ? "Going soon" : "Change time",
+                                           detail: social.myHeading == nil ? "Let friends know" : "You're heading over",
+                                           icon: "figure.walk")
+                            }
+                            .accessibilityLabel(social.myHeading == nil ? "Going soon" : "Change time")
+                            Button { showPlan = true } label: {
+                                ActionTile(title: "Plan a meal", detail: "Pick a time, invite people", icon: "calendar.badge.plus")
+                            }
+                            .accessibilityLabel("Plan a meal")
                     }
                     .buttonStyle(ActionTileStyle())
                     .listRowInsets(EdgeInsets())
                     .listRowBackground(Color.clear)
+                }
+
+                if !social.invites.isEmpty || !social.groupInvites.isEmpty {
+                    Section {
+                        ForEach(social.groupInvites) { GroupInviteRow(group: $0) }
+                        ForEach(social.invites) { plan in
+                            PlanCard(plan: plan, prominent: true) { openPlan = plan.id }
+                        }
+                    } header: {
+                        SectionTitle("Invites for you")
+                    }
                 }
 
                 Section {
@@ -72,7 +74,7 @@ struct TogetherView: View {
                         }
                     }
                 } header: {
-                    Text("At FoCo now")
+                    SectionTitle("At FoCo now")
                 }
 
                 if social.myHeading != nil || !social.friendsHeading.isEmpty {
@@ -80,7 +82,7 @@ struct TogetherView: View {
                         if let mine = social.myHeading { MyHeadingRow(checkin: mine) }
                         ForEach(social.friendsHeading) { FriendHeadingRow(checkin: $0) }
                     } header: {
-                        Text("Heading over")
+                        SectionTitle("Heading over")
                     }
                 }
 
@@ -116,7 +118,7 @@ struct TogetherView: View {
                         }
                     }
                 } header: {
-                    Text("Coming up")
+                    SectionTitle("Coming up")
                 } footer: {
                     Text("Tap a plan to see who's coming and to chat. Swipe left to remove one.")
                 }
@@ -131,7 +133,12 @@ struct TogetherView: View {
                 if social.loadedPeople && social.friends.isEmpty && social.incoming.isEmpty {
                     Section { AddFriendsCard(findFriends: { showFriends = true }) }
                 }
+
+                if social.isLocalDemo {
+                    Section { DemoBanner() }
+                }
             }
+            .onBackdrop()
             .navigationTitle("Together")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -177,30 +184,34 @@ struct TogetherView: View {
     }
 }
 
-/// One of the two big buttons at the top of Together: an icon over its name on Dartmouth Green.
+/// One of the two big buttons at the top of Together: Dartmouth Green glass, icon up top, name below.
 private struct ActionTile: View {
     let title: String
+    let detail: String
     let icon: String
 
     var body: some View {
-        VStack(spacing: 10) {
-            Image(systemName: icon).font(.system(size: 30, weight: .semibold))
-            Text(title).font(.headline)
+        VStack(alignment: .leading, spacing: 0) {
+            Image(systemName: icon)
+                .font(.system(size: 22, weight: .semibold))
+                .frame(width: 44, height: 44)
+                .background(.white.opacity(0.16), in: .circle)
+            Spacer(minLength: 20)
+            Text(title).font(.system(.title3, design: .serif).weight(.bold))
+            Text(detail).font(.footnote.weight(.medium)).opacity(0.82)
         }
         .foregroundStyle(.white)
-        .frame(maxWidth: .infinity, minHeight: 112)
-        .padding(.vertical, 6)
-        // The real Dartmouth Green in light and dark mode (the accent color is lighter in dark mode).
-        .background(Color(red: 0, green: 0x69 / 255, blue: 0x3e / 255).gradient, in: .rect(cornerRadius: 24))
-        .contentShape(.rect(cornerRadius: 24))
+        .frame(maxWidth: .infinity, minHeight: 128, alignment: .leading)
+        .padding(16)
+        .glass(in: .rect(cornerRadius: 28), tint: .dartmouthDeep, interactive: true)
+        .contentShape(.rect(cornerRadius: 28))
     }
 }
 
 private struct ActionTileStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed ? 0.96 : 1)
-            .opacity(configuration.isPressed ? 0.85 : 1)
+            .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .animation(.snappy(duration: 0.15), value: configuration.isPressed)
     }
 }
@@ -239,9 +250,9 @@ private struct AddFriendsCard: View {
                 .foregroundStyle(.secondary)
             HStack(spacing: 10) {
                 Button(action: findFriends) { Text("Find friends").frame(maxWidth: .infinity, minHeight: 36) }
-                    .buttonStyle(.borderedProminent)
+                    .glassButton(prominent: true)
                 InviteByTextButton { Text("Invite by text").frame(maxWidth: .infinity, minHeight: 36) }
-                    .buttonStyle(.bordered)
+                    .glassButton()
             }
             .font(.subheadline.weight(.semibold))
             .padding(.top, 4)
@@ -269,11 +280,11 @@ struct GroupInviteRow: View {
                 Button { Task { await social.acceptInvite(to: group) } } label: {
                     Text("Join").frame(maxWidth: .infinity, minHeight: 34)
                 }
-                .buttonStyle(.borderedProminent)
+                .glassButton(prominent: true)
                 Button { Task { await social.declineInvite(to: group) } } label: {
                     Text("Decline").frame(maxWidth: .infinity, minHeight: 34)
                 }
-                .buttonStyle(.bordered)
+                .glassButton()
             }
             .font(.subheadline.weight(.semibold))
         }
@@ -305,7 +316,7 @@ private struct MyCheckinRow: View {
                 }
                 Spacer()
                 Button("Leave") { Task { await social.checkOut() } }
-                    .buttonStyle(.bordered)
+                    .glassButton()
             }
             .accessibilityElement(children: .combine)
             if room == nil {
@@ -328,7 +339,7 @@ private struct AutoCheckinSetting: View {
 
     var body: some View {
         Toggle(isOn: $presence.enabled) {
-            Label("Check me in automatically", systemImage: "location")
+            Label("Check me in automatically", systemImage: "location").labelStyle(.tile(.blue))
         }
         if presence.enabled && (presence.isDenied || presence.needsAlways) {
             Button {
@@ -353,7 +364,7 @@ private struct ShareWithSetting: View {
         Picker(selection: $share) {
             ForEach(ShareWith.allCases) { Text($0.title).tag($0) }
         } label: {
-            Label("Share where I am with", systemImage: "person.2.badge.gearshape")
+            Label("Share where I am with", systemImage: "person.2.badge.gearshape").labelStyle(.tile(.indigo))
         }
         .onAppear { share = social.defaultShare }
         .onChange(of: share) { social.defaultShare = share }
@@ -376,7 +387,7 @@ private struct FriendHereRow: View {
                 Button("On my way") {
                     Task { await social.headOver(at: .now.addingTimeInterval(10 * 60), spot: checkin.spot, joining: checkin.user.id) }
                 }
-                .buttonStyle(.borderedProminent)
+                .glassButton(prominent: true)
                 .accessibilityHint("Tells \(checkin.user.firstName) you'll be there in about 10 minutes")
             }
         }
@@ -415,7 +426,7 @@ private struct MyHeadingRow: View {
             }
             Spacer()
             Button("Not going") { Task { await social.checkOut() } }
-                .buttonStyle(.bordered)
+                .glassButton()
         }
         .accessibilityElement(children: .combine)
     }
@@ -440,7 +451,7 @@ private struct FriendHeadingRow: View {
                 Button("Me too") {
                     Task { await social.headOver(at: max(eta, .now.addingTimeInterval(60)), spot: checkin.spot, joining: checkin.user.id) }
                 }
-                .buttonStyle(.borderedProminent)
+                .glassButton(prominent: true)
                 .accessibilityHint("Tells \(checkin.user.firstName) you're going at the same time")
             }
         }
@@ -521,10 +532,13 @@ struct RSVPRow: View {
     let status: RSVP?
 
     var body: some View {
-        HStack(spacing: 8) {
-            ForEach([RSVP.going, .maybe, .declined], id: \.self) { option in
-                RSVPButton(status: option, selected: status == option) {
-                    Task { await social.respond(plan, option) }
+        // One fused glass control: the three shapes sit close enough that they flow together.
+        GlassGroup(spacing: 10) {
+            HStack(spacing: 4) {
+                ForEach([RSVP.going, .maybe, .declined], id: \.self) { option in
+                    RSVPButton(status: option, selected: status == option) {
+                        Task { await social.respond(plan, option) }
+                    }
                 }
             }
         }
@@ -607,8 +621,9 @@ private struct RSVPButton: View {
             }
             .font(.subheadline.weight(.semibold))
             .frame(maxWidth: .infinity, minHeight: 40)
-            .background(selected ? (status == .declined ? Color.secondary : Color.dartmouthGreen) : Color.dartmouthGreen.opacity(0.1), in: .capsule)
-            .foregroundStyle(selected ? Color(uiColor: .systemBackground) : Color.dartmouthGreen)
+            .foregroundStyle(selected ? Color.white : Color.primary)
+            .glass(tint: selected ? (status == .declined ? Color.gray : .dartmouthDeep) : nil, interactive: true)
+            .contentShape(.capsule)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(status.title)
@@ -637,7 +652,7 @@ struct ToastBar: View {
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 14)
-        .background(.regularMaterial, in: .rect(cornerRadius: 24, style: .continuous))
+        .glass(in: .rect(cornerRadius: 24, style: .continuous))
         .padding(.horizontal, 16)
         .padding(.bottom, 8)
         .transition(.move(edge: .bottom).combined(with: .opacity))
