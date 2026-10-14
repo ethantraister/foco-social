@@ -56,6 +56,7 @@ Setup on the live project (once):
 2. **Secrets.** Supabase → Edge Functions → Secrets: `APNS_KEY` (paste the whole `.p8` file, including the BEGIN/END lines), `APNS_KEY_ID`, `APNS_TEAM_ID` = `8VN4WGJA8Y`.
 3. **Function.** Supabase → Edge Functions → Deploy a new function → Via editor → name it `push` → paste `supabase/functions/push/index.ts` → Deploy. Leave "Verify JWT" on (the database calls it with the anon key).
 4. **Database.** Run `backend/migrations/010_social_v2.sql` with `ANON_KEY_VALUE` replaced by the anon key.
+5. **Let the database call the function.** In the SQL editor, run `create extension if not exists pg_net;` (migration `003` does this too, but it may not have run). Without it, notifications pile up in `push_queue` unsent and nothing else breaks.
 
 To check one notification went out: in the SQL editor, `select id, title, sent_at from push_queue order by id desc limit 5;` (a sent one has `sent_at`), and Edge Functions → push → Logs shows Apple's answer for each phone.
 
