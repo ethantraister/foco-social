@@ -535,13 +535,11 @@ struct RSVPRow: View {
     let status: RSVP?
 
     var body: some View {
-        // One fused glass control: the three shapes sit close enough that they flow together.
-        GlassGroup(spacing: 10) {
-            HStack(spacing: 4) {
-                ForEach([RSVP.going, .maybe, .declined], id: \.self) { option in
-                    RSVPButton(status: option, selected: status == option) {
-                        Task { await social.respond(plan, option) }
-                    }
+        // Three separate glass buttons (not one glass group, which would melt them into each other).
+        HStack(spacing: 10) {
+            ForEach([RSVP.going, .maybe, .declined], id: \.self) { option in
+                RSVPButton(status: option, selected: status == option) {
+                    Task { await social.respond(plan, option) }
                 }
             }
         }
