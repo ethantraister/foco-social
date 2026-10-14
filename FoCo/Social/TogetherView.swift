@@ -10,6 +10,7 @@ struct TogetherView: View {
     @State private var showFriends = false
     @State private var openPlan: UUID?
     @State private var closedAlert: Date?
+    @Environment(\.tabIsActive) private var active
 
     var body: some View {
         NavigationStack {
@@ -159,8 +160,10 @@ struct TogetherView: View {
                 }
             }
             .navigationDestination(item: $openPlan) { PlanDetailView(planId: $0) }
+            .tabRoot()
             .refreshable { await social.refreshAll() }
-            .task {
+            .task(id: active) {
+                guard active else { return }
                 await Push.registerIfAllowed(ask: true)
                 // Who's here refreshes every 30 s. During a meal, automatic check-in also takes a location reading then,
                 // since iOS can take minutes to report walking in while the app is open.

@@ -12,6 +12,8 @@ The FoCo menu app plus a social layer: see which friends are at FoCo, plan meals
 | **Alerts** | Follow foods (same as v1) |
 | **Me** | Profile, friends and groups, invite friends by text, check in automatically, diet, food requests, notifications, About (community rules, blocked people, privacy, contact), sign out, delete account |
 
+Swipe sideways anywhere on a tab's first screen to move to the tab beside it, in the bar's order (like Instagram). On a screen pushed on top (a dish, a chat, a plan), a sideways swipe goes back instead, and a row that slides open (Remove, Unfollow, Alert me) opens rather than changing tabs.
+
 The Menu and Alerts tabs work without an account. Together and Chats ask you to sign in with your NetID: the app emails a 6-digit code to NetID@dartmouth.edu (no password). Losing signal never signs you out; the app opens to what it last loaded.
 
 FoCo is open 7:30 AM–8:30 PM and 9:30 PM–1:30 AM. Plans, going soon, and checking in by hand turn away times when it's closed, with a popup saying when it opens. A plan's meal (breakfast, lunch, dinner, late night) follows from its time.
@@ -80,7 +82,7 @@ Changes after the first deploy live in `backend/migrations/` (already folded int
 # API + privacy rules (182 checks): run while the server is up
 ~/FoCoSocial-devtools/venv/bin/python backend/local/test_api.py <server log file>
 
-# UI tests: tours of every screen, chats, plan editing and closed hours, accessibility audit, large text, dark mode, photo upload, staying signed in offline
+# UI tests: tours of every screen, chats, plan editing and closed hours, swiping between tabs, accessibility audit, large text, dark mode, photo upload, staying signed in offline
 ~/FoCoSocial-devtools/runtests.sh ~/FoCoSocial /tmp/shots   # uses -useLocalServer, so the live Info.plist keys are ignored
 ```
 

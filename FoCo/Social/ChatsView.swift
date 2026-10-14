@@ -6,6 +6,7 @@ struct ChatsView: View {
     @State private var router = AppRouter.shared
     @State private var path: [ChatTarget] = []
     @State private var newMessage = false
+    @Environment(\.tabIsActive) private var active
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -49,8 +50,10 @@ struct ChatsView: View {
                 }
             }
             .navigationDestination(for: ChatTarget.self) { ChatView(target: $0) }
+            .tabRoot()
             .refreshable { await social.refreshChats() }
-            .task {
+            .task(id: active) {
+                guard active else { return }
                 while !Task.isCancelled {
                     await social.refreshChats()
                     try? await Task.sleep(for: .seconds(15))

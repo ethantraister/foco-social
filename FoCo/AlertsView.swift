@@ -4,6 +4,7 @@ struct AlertsView: View {
     @Environment(MenuStore.self) private var store
     @Environment(Preferences.self) private var prefs
     @Environment(\.openURL) private var openURL
+    @Environment(\.tabIsActive) private var active
     @State private var draft = ""
     @State private var status: NotificationStatus = .unknown
 
@@ -91,7 +92,9 @@ struct AlertsView: View {
             }
             .onBackdrop()
             .navigationTitle("Alerts")
-            .task {
+            .tabRoot()
+            .task(id: active) {
+                guard active else { return }
                 await store.loadUpcoming()
                 status = await .current()
             }

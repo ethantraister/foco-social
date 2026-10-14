@@ -1,7 +1,8 @@
 import Observation
 import SwiftUI
 
-/// Whether the bottom bar shows: it steps aside for the keyboard and for full-screen chats.
+/// Whether the bottom bar shows: it steps aside for the keyboard and for full-screen chats. Also tracks which tabs
+/// have a screen pushed on top, since swiping sideways there should go back, not to the next tab.
 @MainActor @Observable
 final class TabBarState {
     static let shared = TabBarState()
@@ -13,50 +14,60 @@ final class TabBarState {
 
     func hide() { hiders += 1 }
     func show() { hiders = max(0, hiders - 1) }
+
+    /// While the pages are being swiped: where they are (0 = Menu … 4 = Me, in between mid-swipe). Only the bar
+    /// reads it, so swiping redraws the bar and not the pages.
+    var swipe: CGFloat?
+
+    /// How many of each tab's first screens are showing (0 while something is pushed on top).
+    private var roots: [Int: Int] = [:]
+    func canSwipe(from tab: Int) -> Bool { roots[tab, default: 1] > 0 }
+    func rootAppeared(_ tab: Int) { roots[tab, default: 0] += 1 }
+    func rootDisappeared(_ tab: Int) { roots[tab, default: 1] -= 1 }
 }
 
-/// The bottom bar: a floating Liquid Glass capsule with four tabs, and Together raised in the middle as a
-/// Dartmouth Green glass button (like Venmo's Pay/Request). Both are one glass group, so where the button
-/// meets the bar they flow into each other.
+/// The bottom bar: one floating Liquid Glass capsule with all five tabs. Together sits in the middle as a
+/// Dartmouth Green button (like Venmo's Pay/Request). The soft highlight behind the selected tab follows your
+/// finger while you swipe between pages.
 struct FoCoTabBar: View {
     @Binding var selection: Int
     let chatsBadge: Int
     let togetherBadge: Int
-    @Namespace private var selectionSpace
+    @State private var bar = TabBarState.shared
 
     var body: some View {
-        GlassGroup(spacing: 14) {
-            ZStack(alignment: .top) {
-                HStack(spacing: 0) {
-                    item(.menu, "Menu", "fork.knife", "fork.knife")
-                    item(.chats, "Chats", "bubble.left.and.bubble.right", "bubble.left.and.bubble.right.fill", badge: chatsBadge)
-                    Color.clear.frame(width: 84)
-                    item(.alerts, "Alerts", "bell", "bell.fill")
-                    item(.me, "Me", "person.crop.circle", "person.crop.circle.fill")
-                }
-                .padding(.horizontal, 6)
-                .frame(height: TabBarState.height)
-                .glass(in: Capsule())
-                together
-            }
+        HStack(spacing: 0) {
+            item(.menu, "Menu", "fork.knife", "fork.knife")
+            item(.chats, "Chats", "bubble.left.and.bubble.right", "bubble.left.and.bubble.right.fill", badge: chatsBadge)
+            together
+            item(.alerts, "Alerts", "bell", "bell.fill")
+            item(.me, "Me", "person.crop.circle", "person.crop.circle.fill")
         }
-        // Drawn above the glass layer (inside the glass group it ended up underneath, and vanished).
-        .overlay(alignment: .bottom) {
-            Text("Together")
-                .font(.system(size: 10.5, weight: .bold))
-                .lineLimit(1)
-                .fixedSize()
-                .foregroundStyle(selection == AppTab.together.rawValue ? Color.accentColor : Color.primary)
-                .padding(.bottom, 8)
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-        }
+        .background { highlight }
+        .padding(.horizontal, 6)
+        .frame(height: TabBarState.height)
+        .glass(in: Capsule())
         .padding(.horizontal, 14)
         .dynamicTypeSize(...DynamicTypeSize.xxLarge)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Tab bar")
         .accessibilityIdentifier("tabBar")
-        .animation(.snappy(duration: 0.28), value: selection)
+    }
+
+    /// The soft pill behind the selected tab, like the system bar's. It fades on its way into Together, whose green
+    /// button stands out on its own.
+    private var highlight: some View {
+        GeometryReader { geo in
+            let slot = geo.size.width / 5
+            let at = bar.swipe ?? CGFloat(selection)
+            Capsule()
+                .fill(Color.primary.opacity(0.07))
+                .frame(width: slot)
+                .offset(x: at * slot)
+                .opacity(min(1, abs(at - CGFloat(AppTab.together.rawValue))))
+                .animation(bar.swipe == nil ? .snappy(duration: 0.28) : nil, value: at)
+        }
+        .accessibilityHidden(true)
     }
 
     private func item(_ tab: AppTab, _ title: String, _ icon: String, _ selectedIcon: String, badge: Int = 0) -> some View {
@@ -72,14 +83,6 @@ struct FoCoTabBar: View {
             .foregroundStyle(selected ? Color.accentColor : Color.primary.opacity(0.88))
             .frame(maxWidth: .infinity)
             .frame(height: TabBarState.height - 12)
-            .background {
-                // The selected tab sits in a soft pill that slides across, like the system bar's.
-                if selected {
-                    Capsule()
-                        .fill(Color.primary.opacity(0.07))
-                        .matchedGeometryEffect(id: "selected", in: selectionSpace)
-                }
-            }
             .contentShape(.capsule)
         }
         .buttonStyle(.plain)
@@ -92,15 +95,26 @@ struct FoCoTabBar: View {
     private var together: some View {
         let selected = selection == AppTab.together.rawValue
         return Button { selection = AppTab.together.rawValue } label: {
-            Image(systemName: "person.2.fill")
-                .font(.system(size: 22, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 56, height: 56)
-                .glass(in: Circle(), tint: .dartmouthDeep, interactive: true)
-                .overlay(alignment: .topTrailing) { Badge(count: togetherBadge).offset(x: 2, y: -2) }
-                .offset(y: -27)
-                .frame(width: 84, height: TabBarState.height, alignment: .top)
-                .contentShape(.rect)
+            VStack(spacing: 2) {
+                Image(systemName: "person.2.fill")
+                    .font(.system(size: 19, weight: .semibold))
+                    .frame(height: 24)
+                Text("Together").font(.system(size: 10.5, weight: .bold)).lineLimit(1).fixedSize()
+            }
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity)
+            .frame(height: TabBarState.height - 12)
+            .background {
+                // Solid, not a second layer of glass: glass on glass turns muddy. The gradient and the fine edge give
+                // it the same sheen as the bar around it.
+                Capsule()
+                    .fill(Color.dartmouthDeep.gradient)
+                    .overlay(Capsule().strokeBorder(.white.opacity(0.22), lineWidth: 0.5))
+                    .shadow(color: Color.dartmouthDeep.opacity(0.35), radius: 6, y: 2)
+                    .padding(.horizontal, 1)
+            }
+            .overlay(alignment: .topTrailing) { Badge(count: togetherBadge).offset(x: 2, y: -5) }
+            .contentShape(.capsule)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Together")
@@ -126,15 +140,51 @@ private struct Badge: View {
     }
 }
 
-/// Each tab's content: the system tab bar hidden (ours replaces it), and every list in the tab (pushed screens too)
-/// able to scroll its last rows clear of our bar. A safe-area inset here doesn't reach lists inside the
-/// navigation stack, but content margins do.
+extension EnvironmentValues {
+    /// Whether this tab's page is the one on screen. All five pages stay loaded so you can swipe between them,
+    /// so anything that refreshes on a timer should only run while this is true.
+    @Entry var tabIsActive = true
+    /// Which tab's page a view is on.
+    @Entry var pagerTab: AppTab? = nil
+}
+
+/// Each tab's page: every list in it (pushed screens too) can scroll its last rows clear of our bar. A safe-area
+/// inset here doesn't reach lists inside the navigation stack, but content margins do.
 private struct TabContent: ViewModifier {
     @State private var bar = TabBarState.shared
     func body(content: Content) -> some View {
         content
-            .toolbar(.hidden, for: .tabBar)
             .contentMargins(.bottom, bar.visible ? TabBarState.height + 20 : 0, for: .automatic)
+    }
+}
+
+/// On a tab's first screen: notes when a screen is pushed on top of it.
+private struct TabRoot: ViewModifier {
+    @Environment(\.pagerTab) private var tab
+    func body(content: Content) -> some View {
+        content
+            .background { NavigationMargins().frame(width: 0, height: 0).accessibilityHidden(true) }
+            .onAppear { if let tab { TabBarState.shared.rootAppeared(tab.rawValue) } }
+            .onDisappear { if let tab { TabBarState.shared.rootDisappeared(tab.rawValue) } }
+    }
+}
+
+/// In the pager, a tab's navigation stack isn't inside a system tab bar, and UIKit then gives it no side margins:
+/// large titles sat against the screen's edge. This gives the stack the screen's usual margins.
+private struct NavigationMargins: UIViewControllerRepresentable {
+    func makeUIViewController(context: Context) -> Controller { Controller() }
+    func updateUIViewController(_ controller: Controller, context: Context) {}
+
+    final class Controller: UIViewController {
+        override func viewIsAppearing(_ animated: Bool) {
+            super.viewIsAppearing(animated)
+            var next: UIResponder? = view
+            while let responder = next, !(responder is UINavigationController) { next = responder.next }
+            guard let nav = next as? UINavigationController,
+                  let screen = view.window?.rootViewController?.systemMinimumLayoutMargins else { return }
+            nav.viewRespectsSystemMinimumLayoutMargins = false
+            nav.view.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 0, leading: screen.leading, bottom: 0, trailing: screen.trailing)
+        }
     }
 }
 
@@ -145,6 +195,9 @@ extension View {
 
 extension View {
     func tabContent() -> some View { modifier(TabContent()) }
+
+    /// Marks a tab's first screen (inside its navigation stack), so swiping sideways only changes tabs from there.
+    func tabRoot() -> some View { modifier(TabRoot()) }
 
     /// For screens that take the whole height, like a chat: the bottom bar steps aside while they're up.
     func hidesTabBar() -> some View {

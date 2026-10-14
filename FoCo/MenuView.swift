@@ -69,8 +69,9 @@ struct MenuView: View {
                 }
             }
             .navigationTitle("FoCo")
-            .searchable(text: $query, prompt: "Search this week — steak, sushi…")
+            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "Search this week — steak, sushi…")
             .navigationDestination(for: FoodRoute.self) { FoodDetailView(route: $0) }
+            .tabRoot()
         }
     }
 

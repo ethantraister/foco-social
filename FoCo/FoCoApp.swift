@@ -63,17 +63,11 @@ struct ContentView: View {
     @State private var bar = TabBarState.shared
 
     var body: some View {
-        TabView(selection: $tab) {
-            Tab("Menu", systemImage: "fork.knife", value: AppTab.menu.rawValue) { MenuView().tabContent() }
-            Tab("Chats", systemImage: "bubble.left.and.bubble.right", value: AppTab.chats.rawValue) {
-                SignInGate(reason: "Message friends, your groups, and the people in each meal plan.") { ChatsView() }.tabContent()
-            }
-            Tab("Together", systemImage: "person.2.fill", value: AppTab.together.rawValue) {
-                SignInGate(reason: "See which friends are at FoCo right now, make meal plans, and get invited to team dinners.") { TogetherView() }
-                    .tabContent()
-            }
-            Tab("Alerts", systemImage: "bell.badge", value: AppTab.alerts.rawValue) { AlertsView().tabContent() }
-            Tab("Me", systemImage: "person.crop.circle", value: AppTab.me.rawValue) { MeView().tabContent() }
+        ZStack {
+            // The tabs side by side, swiped between like Instagram's. With a screen pushed on top of a tab,
+            // a sideways swipe goes back (the system's gesture) instead.
+            TabPager(selection: $tab, swipeEnabled: bar.canSwipe(from: tab))
+                .ignoresSafeArea()
         }
         .overlay(alignment: .bottom) {
             GeometryReader { geo in

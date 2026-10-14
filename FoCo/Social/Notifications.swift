@@ -4,7 +4,7 @@ import UIKit
 import UserNotifications
 
 /// The tabs, in the order they sit along the bottom.
-enum AppTab: Int {
+enum AppTab: Int, CaseIterable {
     case menu = 0, chats, together, alerts, me
 }
 

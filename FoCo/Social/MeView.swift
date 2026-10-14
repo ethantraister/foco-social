@@ -45,6 +45,7 @@ struct MeView: View {
             }
             .onBackdrop()
             .navigationTitle("Me")
+            .tabRoot()
             .sheet(isPresented: $editing) { EditProfileSheet() }
             .sheet(isPresented: $signingIn) { SignInSheet(reason: "Sign in to see when friends are at FoCo, plan meals, and chat.") }
             // Both in the middle of the screen, laid out the same: a title, a line, and two short buttons side by side

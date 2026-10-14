@@ -12,10 +12,10 @@ struct SignInGate<Content: View>: View {
     var body: some View {
         switch social.phase {
         case .ready: content()
-        case .loading: NavigationStack { ProfileLoadingView().toolbar { cancelButton } }
-        case .needsProfile: NavigationStack { ProfileSetupView().toolbar { cancelButton } }
+        case .loading: NavigationStack { ProfileLoadingView().toolbar { cancelButton }.tabRoot() }
+        case .needsProfile: NavigationStack { ProfileSetupView().toolbar { cancelButton }.tabRoot() }
         // In a sheet the keyboard comes up right away; on a tab it waits for a tap, so the bottom bar stays.
-        case .signedOut: NavigationStack { SignInView(reason: reason, autofocus: onCancel != nil).toolbar { cancelButton } }
+        case .signedOut: NavigationStack { SignInView(reason: reason, autofocus: onCancel != nil).toolbar { cancelButton }.tabRoot() }
         }
     }
 
