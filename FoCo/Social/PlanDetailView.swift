@@ -15,6 +15,12 @@ struct PlanDetailView: View {
         Group {
             if let plan {
                 content(plan)
+            } else if social.togetherFailed {
+                ContentUnavailableView {
+                    Label("Couldn't load this plan", systemImage: "calendar.badge.exclamationmark")
+                } actions: {
+                    Button("Try again") { Task { await social.refreshTogether() } }.buttonStyle(.bordered)
+                }
             } else if !social.loadedTogether {
                 ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {

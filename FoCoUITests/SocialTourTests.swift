@@ -672,9 +672,14 @@ final class SocialTourTests: XCTestCase {
         }
         tab("Menu")
         sleep(3)
+        func friendsLine() -> Bool { ["Jordan", "Sam", "Maya", "Theo"].contains { button($0).exists } }
+        // Once tonight's dinner is over (and FoCo is closed, so no one's there), the demo team dinner is tomorrow's.
+        if !friendsLine() {
+            button("Tomorrow").tap()
+            sleep(2)
+        }
         snap("menu-friends-line")
-        let line = button("Jordan")
-        XCTAssertTrue(line.exists || button("Sam").exists || button("Maya").exists, "friends line on Menu")
+        XCTAssertTrue(friendsLine(), "friends line on Menu")
     }
 
     func testSocialDarkMode() {

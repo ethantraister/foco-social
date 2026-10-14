@@ -23,7 +23,11 @@ final class SocialStore {
     /// Every chat you're in, newest activity first.
     private(set) var chats: [ChatThread] = []
     private(set) var loadedChats = false
+    /// The last try at loading chats failed (and there are none to show), so the tab offers Try again instead of spinning.
+    private(set) var chatsFailed = false
     private(set) var loadedTogether = false
+    /// Loading Together failed with nothing saved to show, so its screens offer Try again instead of spinning.
+    private(set) var togetherFailed = false
     private(set) var loadedPeople = false
     /// The last request couldn't reach the server. Screens say so instead of spinning.
     private(set) var isOffline = false
@@ -322,8 +326,10 @@ final class SocialStore {
         blocked = []
         chats = []
         loadedChats = false
+        chatsFailed = false
         openChat = nil
         loadedTogether = false
+        togetherFailed = false
         loadedPeople = false
         sentRequests = []
         popularRequests = []
@@ -350,11 +356,12 @@ final class SocialStore {
 
     func refreshTogether() async {
         guard phase == .ready else { return }
-        await run(silent: true) {
+        let ok = await run(silent: true) {
             together = try await client.rpc("together", ["window_hours": 24 * 8])
             loadedTogether = true
             saveTogether()
         }
+        togetherFailed = !ok && !loadedTogether
         if loadedTogether { MaybeReminders.schedule(for: together.plans.filter { $0.status(of: myId) == .maybe }) }
     }
 
@@ -390,10 +397,11 @@ final class SocialStore {
 
     func refreshChats() async {
         guard phase == .ready else { return }
-        await run(silent: true) {
+        let ok = await run(silent: true) {
             chats = try await client.rpc("my_chats")
             loadedChats = true
         }
+        chatsFailed = !ok && !loadedChats
     }
 
     // MARK: Eating together

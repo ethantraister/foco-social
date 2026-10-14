@@ -92,6 +92,12 @@ struct TogetherView: View {
                                 Button("Start one") { showPlan = true }
                             }
                             .foregroundStyle(.secondary)
+                        } else if social.togetherFailed && !social.isOffline {
+                            HStack {
+                                Text("Couldn't load plans.").foregroundStyle(.secondary)
+                                Spacer()
+                                Button("Try again") { Task { await social.refreshTogether() } }
+                            }
                         } else if !social.isOffline {
                             HStack { Spacer(); ProgressView(); Spacer() }
                         }

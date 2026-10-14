@@ -23,6 +23,15 @@ struct ChatsView: View {
                             Button("New message") { newMessage = true }.buttonStyle(.borderedProminent)
                         }
                         .listRowBackground(Color.clear)
+                    } else if social.chatsFailed && !social.isOffline {
+                        ContentUnavailableView {
+                            Label("Couldn't load chats", systemImage: "exclamationmark.bubble")
+                        } description: {
+                            Text("Something went wrong on our end. Try again in a minute.")
+                        } actions: {
+                            Button("Try again") { Task { await social.refreshChats() } }.buttonStyle(.bordered)
+                        }
+                        .listRowBackground(Color.clear)
                     } else if !social.isOffline {
                         HStack { Spacer(); ProgressView(); Spacer() }.listRowBackground(Color.clear)
                     }
