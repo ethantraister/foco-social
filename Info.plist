@@ -10,6 +10,8 @@
 	</array>
 	<key>FOCO_DEMO_SERVER</key>
 	<string></string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>
