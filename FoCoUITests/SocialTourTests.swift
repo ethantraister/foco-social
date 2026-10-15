@@ -31,6 +31,17 @@ final class SocialTourTests: XCTestCase {
         item.tap()
     }
 
+    /// The first photo in the system photo picker. (iOS 26 puts a one-time note about private access above them.)
+    private func pickFirstPhoto() {
+        let photo = app.images.matching(NSPredicate(format: "label BEGINSWITH 'Photo'")).firstMatch
+        if photo.waitForExistence(timeout: 3) {
+            // The picker runs in its own process, so its photos don't count as hittable: tap where it is.
+            photo.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        } else {
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.16, dy: 0.43)).tap()
+        }
+    }
+
     private func back() {
         app.navigationBars.buttons.element(boundBy: 0).tap()
         sleep(1)
@@ -73,7 +84,12 @@ final class SocialTourTests: XCTestCase {
         XCTAssertTrue(field.waitForExistence(timeout: 5), "chat has a message box")
         field.tap()
         field.typeText(message)
-        app.buttons["sendMessage"].tap()
+        let sendButton = app.buttons["sendMessage"]
+        let keyboard = app.keyboards.firstMatch
+        if keyboard.exists {
+            XCTAssertLessThanOrEqual(sendButton.frame.maxY, keyboard.frame.minY + 1, "the send button stays above the keyboard")
+        }
+        sendButton.tap()
         XCTAssertTrue(text(containing: message).waitForExistence(timeout: 5), "sent message shows in the chat")
     }
 
@@ -239,11 +255,14 @@ final class SocialTourTests: XCTestCase {
         sleep(2)
         snap("friend-accepted")
         let star = app.buttons["Make Maya a close friend"]
+        // Lists only make rows as they scroll into view.
+        for _ in 0..<3 where !(star.exists && star.isHittable) { app.swipeUp(); sleep(1) }
         XCTAssertTrue(star.waitForExistence(timeout: 3), "a star makes someone a close friend")
         star.tap()
         XCTAssertTrue(app.buttons["Maya is a close friend"].waitForExistence(timeout: 3))
         snap("close-friend")
         let inviteText = button("Invite friends by text")
+        for _ in 0..<3 where !(inviteText.exists && inviteText.isHittable) { app.swipeDown(); sleep(1) }
         XCTAssertTrue(inviteText.waitForExistence(timeout: 3), "invite friends by text from Friends")
         inviteText.tap()
         sleep(3)
@@ -425,7 +444,7 @@ final class SocialTourTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Add group photo"].waitForExistence(timeout: 3), "the options sheet is about the group")
         app.buttons["Choose photo"].tap()
         sleep(3)
-        app.coordinate(withNormalizedOffset: CGVector(dx: 0.16, dy: 0.43)).tap()
+        pickFirstPhoto()
         XCTAssertTrue(app.staticTexts["Move and Scale"].waitForExistence(timeout: 8))
         app.buttons["Choose"].tap()
         XCTAssertTrue(app.buttons["Edit photo"].waitForExistence(timeout: 8), "the group photo saves right away")
@@ -575,7 +594,7 @@ final class SocialTourTests: XCTestCase {
         snap("photo-options")
         app.buttons["Choose photo"].tap()
         sleep(3)
-        app.coordinate(withNormalizedOffset: CGVector(dx: 0.16, dy: 0.43)).tap()
+        pickFirstPhoto()
         // A camera-roll photo opens the crop screen: drag, pinch, then Choose.
         XCTAssertTrue(app.staticTexts["Move and Scale"].waitForExistence(timeout: 8), "a chosen photo can be cropped")
         let photo = app.otherElements["Photo, centered in the circle"]

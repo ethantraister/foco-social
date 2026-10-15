@@ -235,52 +235,12 @@ struct ChatView: View {
     }
 
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(spacing: 2) {
-                    if loaded && messages.isEmpty {
-                        Text(emptyLine)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.center)
-                            .padding(.top, 60)
-                            .padding(.horizontal, 32)
-                    } else if failed && messages.isEmpty {
-                        VStack(spacing: 10) {
-                            Text("Couldn't load messages.").foregroundStyle(.secondary)
-                            Button("Try again") { Task { await load() } }
-                        }
-                        .padding(.top, 60)
-                    }
-                    ForEach(Array(messages.enumerated()), id: \.element.id) { i, message in
-                        let previous = i > 0 ? messages[i - 1] : nil
-                        if previous == nil || message.createdAt.timeIntervalSince(previous!.createdAt) > 15 * 60 {
-                            Text(stamp(message.createdAt))
-                                .font(.caption2.weight(.medium))
-                                .foregroundStyle(.secondary)
-                                .padding(.top, 14)
-                                .padding(.bottom, 4)
-                        }
-                        MessageBubble(message: message,
-                                      mine: message.sender.id == social.myId,
-                                      showName: isGroupish && message.sender.id != social.myId && previous?.sender.id != message.sender.id,
-                                      unsend: { Task { await unsend(message) } },
-                                      report: { Task { await report(message) } },
-                                      block: { blocking = message.sender })
-                            .id(message.id)
-                    }
-                }
-                .padding(.horizontal, 12)
-                .padding(.bottom, 8)
-            }
-            .defaultScrollAnchor(.bottom)
-            .scrollDismissesKeyboard(.interactively)
-            .onChange(of: messages.last?.id) {
-                guard let last = messages.last?.id else { return }
-                withAnimation(.snappy) { proxy.scrollTo(last, anchor: .bottom) }
-            }
+        // The message box sits below the messages rather than floating over them: on iOS 26, the list
+        // scrolling underneath took the taps meant for the send button.
+        VStack(spacing: 0) {
+            messageList
+            composer
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) { composer }
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -328,6 +288,54 @@ struct ChatView: View {
             }
         } message: { _ in
             Text("You won't see each other's plans, check-ins, or messages, and they'll be removed from your friends.")
+        }
+    }
+
+    private var messageList: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(spacing: 2) {
+                    if loaded && messages.isEmpty {
+                        Text(emptyLine)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.top, 60)
+                            .padding(.horizontal, 32)
+                    } else if failed && messages.isEmpty {
+                        VStack(spacing: 10) {
+                            Text("Couldn't load messages.").foregroundStyle(.secondary)
+                            Button("Try again") { Task { await load() } }
+                        }
+                        .padding(.top, 60)
+                    }
+                    ForEach(Array(messages.enumerated()), id: \.element.id) { i, message in
+                        let previous = i > 0 ? messages[i - 1] : nil
+                        if previous == nil || message.createdAt.timeIntervalSince(previous!.createdAt) > 15 * 60 {
+                            Text(stamp(message.createdAt))
+                                .font(.caption2.weight(.medium))
+                                .foregroundStyle(.secondary)
+                                .padding(.top, 14)
+                                .padding(.bottom, 4)
+                        }
+                        MessageBubble(message: message,
+                                      mine: message.sender.id == social.myId,
+                                      showName: isGroupish && message.sender.id != social.myId && previous?.sender.id != message.sender.id,
+                                      unsend: { Task { await unsend(message) } },
+                                      report: { Task { await report(message) } },
+                                      block: { blocking = message.sender })
+                            .id(message.id)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.bottom, 8)
+            }
+            .defaultScrollAnchor(.bottom)
+            .scrollDismissesKeyboard(.interactively)
+            .onChange(of: messages.last?.id) {
+                guard let last = messages.last?.id else { return }
+                withAnimation(.snappy) { proxy.scrollTo(last, anchor: .bottom) }
+            }
         }
     }
 

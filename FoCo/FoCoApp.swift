@@ -65,9 +65,10 @@ struct ContentView: View {
     var body: some View {
         ZStack {
             // The tabs side by side, swiped between like Instagram's. With a screen pushed on top of a tab,
-            // a sideways swipe goes back (the system's gesture) instead.
+            // a sideways swipe goes back (the system's gesture) instead. The pages make room for the keyboard here,
+            // all together: inside the pager, iOS 26 doesn't move them up on its own.
             TabPager(selection: $tab, swipeEnabled: bar.canSwipe(from: tab))
-                .ignoresSafeArea()
+                .ignoresSafeArea(.container)
         }
         .overlay(alignment: .bottom) {
             GeometryReader { geo in

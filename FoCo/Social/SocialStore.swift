@@ -140,7 +140,7 @@ final class SocialStore {
     /// People you picked for a plan, group, or message, and when. Kept on this phone for "recent friends".
     private var recentPeople: [UUID: Date] {
         let raw = UserDefaults.standard.dictionary(forKey: "recentPeople") as? [String: Double] ?? [:]
-        return Dictionary(uniqueKeysWithValues: raw.compactMap { k, v in UUID(uuidString: k).map { ($0, Date(timeIntervalSince1970: v)) } })
+        return Dictionary(raw.compactMap { k, v in UUID(uuidString: k).map { ($0, Date(timeIntervalSince1970: v)) } }, uniquingKeysWith: max)
     }
 
     private func noteRecent(_ ids: [UUID]) {

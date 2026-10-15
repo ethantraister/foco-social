@@ -89,89 +89,96 @@ struct SignInView: View {
     }
 
     var body: some View {
-        Form {
-            Section {
-                BrandHeader(title: "Eat with friends", subtitle: reason)
-            }
-            .listRowBackground(Color.clear)
-
-            if let sentTo {
+        ScrollViewReader { proxy in
+            Form {
                 Section {
-                    TextField("6-digit code", text: $code)
-                        .keyboardType(.numberPad)
-                        .textContentType(.oneTimeCode)
-                        .font(.title2.monospacedDigit())
-                        .focused($focused)
-                        .disabled(working)
-                        .onChange(of: code) {
-                            // Digits only; a pasted or autofilled code signs you in without another tap.
-                            let digits = String(code.filter(\.isNumber).prefix(6))
-                            if digits != code { code = digits }
-                            if digits.count == 6 && !working { Task { await verify(sentTo) } }
-                        }
-                    Button {
-                        Task { await verify(sentTo) }
-                    } label: {
-                        HStack { Text("Sign in"); if working { Spacer(); ProgressView() } }
-                    }
-                    .disabled(code.count < 6 || working)
-                } header: {
-                    Text("Enter the code we emailed to \(sentTo)")
-                } footer: {
-                    VStack(alignment: .leading, spacing: 10) {
-                        if social.isLocalDemo { Text("Local test server: the code is printed in the server window, and 123456 always works.") }
-                        Text("It can take a minute to arrive. Check your junk folder too.")
-                        TimelineView(.periodic(from: .now, by: 1)) { context in
-                            let wait = Int(ceil((sentAt ?? .distantPast).addingTimeInterval(Self.resendDelay).timeIntervalSince(context.date)))
-                            Button(wait > 0 ? "Send a new code in \(wait)s" : "Send a new code") {
-                                Task { await sendCode(to: sentTo) }
-                            }
-                            .disabled(wait > 0 || working)
-                        }
-                        Button("Use a different NetID") { self.sentTo = nil; code = "" }
-                    }
+                    BrandHeader(title: "Eat with friends", subtitle: reason)
                 }
-            } else {
-                Section {
-                    HStack(spacing: 2) {
-                        TextField("NetID", text: $email)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
-                            .keyboardType(.emailAddress)
-                            .textContentType(.username)
-                            .submitLabel(.continue)
+                .listRowBackground(Color.clear)
+
+                if let sentTo {
+                    Section {
+                        TextField("6-digit code", text: $code)
+                            .keyboardType(.numberPad)
+                            .textContentType(.oneTimeCode)
+                            .font(.title2.monospacedDigit())
                             .focused($focused)
-                            .onSubmit { if validEmail && !isReviewAccount { Task { await sendCode(to: normalized) } } }
-                        if !email.contains("@") {
-                            Text("@dartmouth.edu").foregroundStyle(.secondary)
-                        }
-                    }
-                    if isReviewAccount {
-                        SecureField("Password", text: $password)
-                            .textContentType(.password)
-                        Button {
-                            Task {
-                                working = true
-                                _ = await social.signIn(email: normalized, password: password)
-                                working = false
+                            .disabled(working)
+                            .onChange(of: code) {
+                                // Digits only; a pasted or autofilled code signs you in without another tap.
+                                let digits = String(code.filter(\.isNumber).prefix(6))
+                                if digits != code { code = digits }
+                                if digits.count == 6 && !working { Task { await verify(sentTo) } }
                             }
+                        Button {
+                            Task { await verify(sentTo) }
                         } label: {
                             HStack { Text("Sign in"); if working { Spacer(); ProgressView() } }
                         }
-                        .disabled(password.isEmpty || working)
-                    } else {
-                        Button {
-                            Task { await sendCode(to: normalized) }
-                        } label: {
-                            HStack { Text("Email me a code"); if working { Spacer(); ProgressView() } }
+                        .disabled(code.count < 6 || working)
+                    } header: {
+                        Text("Enter the code we emailed to \(sentTo)")
+                    } footer: {
+                        VStack(alignment: .leading, spacing: 10) {
+                            if social.isLocalDemo { Text("Local test server: the code is printed in the server window, and 123456 always works.") }
+                            Text("It can take a minute to arrive. Check your junk folder too.")
+                            TimelineView(.periodic(from: .now, by: 1)) { context in
+                                let wait = Int(ceil((sentAt ?? .distantPast).addingTimeInterval(Self.resendDelay).timeIntervalSince(context.date)))
+                                Button(wait > 0 ? "Send a new code in \(wait)s" : "Send a new code") {
+                                    Task { await sendCode(to: sentTo) }
+                                }
+                                .disabled(wait > 0 || working)
+                            }
+                            Button("Use a different NetID") { self.sentTo = nil; code = "" }
                         }
-                        .disabled(!validEmail || working)
                     }
-                } header: {
-                    Text("Your NetID")
-                } footer: {
-                    Text(verbatim: "Type your NetID (like f00abcd) and we'll email a sign-in code to NetID@dartmouth.edu. Only Dartmouth students can join. No password needed.")
+                } else {
+                    Section {
+                        HStack(spacing: 2) {
+                            TextField("NetID", text: $email)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                                .keyboardType(.emailAddress)
+                                .textContentType(.username)
+                                .submitLabel(.continue)
+                                .focused($focused)
+                                .onSubmit { if validEmail && !isReviewAccount { Task { await sendCode(to: normalized) } } }
+                            if !email.contains("@") {
+                                Text("@dartmouth.edu").foregroundStyle(.secondary)
+                            }
+                        }
+                        if isReviewAccount {
+                            SecureField("Password", text: $password)
+                                .textContentType(.password)
+                            Button {
+                                Task {
+                                    working = true
+                                    _ = await social.signIn(email: normalized, password: password)
+                                    working = false
+                                }
+                            } label: {
+                                HStack { Text("Sign in"); if working { Spacer(); ProgressView() } }
+                            }
+                            .disabled(password.isEmpty || working)
+                            .id("reviewSignIn")
+                        } else {
+                            Button {
+                                Task { await sendCode(to: normalized) }
+                            } label: {
+                                HStack { Text("Email me a code"); if working { Spacer(); ProgressView() } }
+                            }
+                            .disabled(!validEmail || working)
+                        }
+                    } header: {
+                        Text("Your NetID")
+                    } footer: {
+                        Text(verbatim: "Type your NetID (like f00abcd) and we'll email a sign-in code to NetID@dartmouth.edu. Only Dartmouth students can join. No password needed.")
+                    }
                 }
+            }
+            // The password and its Sign in button appear under the NetID, where the keyboard would cover them.
+            .onChange(of: isReviewAccount) { _, review in
+                if review { withAnimation { proxy.scrollTo("reviewSignIn", anchor: .bottom) } }
             }
         }
         .onBackdrop()

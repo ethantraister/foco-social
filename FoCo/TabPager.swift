@@ -7,7 +7,8 @@ import UIKit
 /// status bar still scrolls it to the top.
 struct TabPager: UIViewControllerRepresentable {
     @Binding var selection: Int
-    /// Off while a screen is pushed on top of the current tab: a sideways swipe there goes back instead.
+    /// Off while a screen is pushed on top of the current tab: a sideways swipe there goes back instead (the pages'
+    /// own scrolling is switched off, so it can't take the swipe from the back gesture).
     let swipeEnabled: Bool
     @Environment(MenuStore.self) private var store
     @Environment(Preferences.self) private var prefs
@@ -25,12 +26,15 @@ struct TabPager: UIViewControllerRepresentable {
         }
         pager.view.backgroundColor = .clear
         pager.delegate = coordinator
-        pager.dataSource = swipeEnabled ? coordinator : nil
+        // Set once and left alone: UIKit's page controller can crash if its data source changes while pages move.
+        pager.dataSource = coordinator
         pager.setViewControllers([coordinator.pages[selection]], direction: .forward, animated: false)
+        coordinator.pager = pager
         coordinator.current = selection
         if let scroll = pager.view.subviews.lazy.compactMap({ $0 as? UIScrollView }).first {
             // Only the page's own list should answer a tap on the status bar.
             scroll.scrollsToTop = false
+            scroll.isScrollEnabled = swipeEnabled
             coordinator.follow(scroll)
             // Sees each touch first (and never handles it), to let rows that slide open go first.
             let watcher = UIPanGestureRecognizer()
@@ -44,15 +48,12 @@ struct TabPager: UIViewControllerRepresentable {
     func updateUIViewController(_ pager: UIPageViewController, context: Context) {
         let coordinator = context.coordinator
         coordinator.selection = $selection
-        if (pager.dataSource != nil) != swipeEnabled { pager.dataSource = swipeEnabled ? coordinator : nil }
+        coordinator.allowSwipes(swipeEnabled)
         guard selection != coordinator.shown else { return }
         coordinator.shown = selection
         for (index, host) in coordinator.pages.enumerated() { host.rootView = page(AppTab(rawValue: index)!) }
         // A tap on the bar (or a notification) jumps straight to its tab, like a normal tab bar.
-        if selection != coordinator.current, !coordinator.swiping {
-            pager.setViewControllers([coordinator.pages[selection]], direction: selection > coordinator.current ? .forward : .reverse, animated: false)
-            coordinator.current = selection
-        }
+        coordinator.show(selection)
     }
 
     private func page(_ tab: AppTab) -> TabPage {
@@ -63,17 +64,52 @@ struct TabPager: UIViewControllerRepresentable {
     final class Coordinator: NSObject, UIPageViewControllerDataSource, UIPageViewControllerDelegate, UIGestureRecognizerDelegate {
         var selection: Binding<Int>
         var pages: [UIHostingController<TabPage>] = []
+        weak var pager: UIPageViewController?
         /// The page the pager is showing, and the selection the pages were last told about.
         var current = AppTab.together.rawValue
         var shown = AppTab.together.rawValue
-        var swiping = false
+        /// From the start of a swipe until its pages settle.
+        private var swiping = false
+        /// What waits for the pages to stop moving: a tab tapped mid-swipe, and swiping turned on or off.
+        private var pendingTab: Int?
+        private var wantsSwipes: Bool?
+        private weak var scroll: UIScrollView?
         private var offsetWatch: NSKeyValueObservation?
-        private weak var pagesPan: UIPanGestureRecognizer?
         private let waitingOn = NSHashTable<UIGestureRecognizer>.weakObjects()
 
         init(selection: Binding<Int>) {
             self.selection = selection
             shown = selection.wrappedValue
+        }
+
+        /// UIKit's page controller can crash if its pages are swapped, or its scrolling switched, while they're still moving.
+        private var moving: Bool {
+            guard let scroll else { return false }
+            return swiping || scroll.isTracking || scroll.isDragging || scroll.isDecelerating
+        }
+
+        /// Jumps straight to a tab, once the pages are still.
+        func show(_ index: Int) {
+            guard index != current else { pendingTab = nil; return }
+            guard let pager, !moving else { pendingTab = index; return }
+            pendingTab = nil
+            pager.setViewControllers([pages[index]], direction: index > current ? .forward : .reverse, animated: false)
+            current = index
+        }
+
+        /// Swiping between tabs is off while a screen is pushed on top of the current one.
+        func allowSwipes(_ on: Bool) {
+            guard let scroll, scroll.isScrollEnabled != on || wantsSwipes != nil else { return }
+            guard !moving else { wantsSwipes = on; return }
+            wantsSwipes = nil
+            scroll.isScrollEnabled = on
+        }
+
+        /// Catches up on whatever waited for the pages to stop.
+        private func settle() {
+            guard !moving else { return }
+            if let on = wantsSwipes { allowSwipes(on) }
+            if let tab = pendingTab { show(tab) }
         }
 
         func pageViewController(_ pager: UIPageViewController, viewControllerBefore page: UIViewController) -> UIViewController? {
@@ -94,15 +130,21 @@ struct TabPager: UIViewControllerRepresentable {
                                 previousViewControllers: [UIViewController], transitionCompleted completed: Bool) {
             swiping = false
             TabBarState.shared.swipe = nil
-            guard completed, let page = pager.viewControllers?.first,
-                  let index = pages.firstIndex(where: { $0 === page }) else { return }
-            current = index
-            selection.wrappedValue = index
+            if completed, let page = pager.viewControllers?.first, let index = pages.firstIndex(where: { $0 === page }) {
+                current = index
+                // A tab tapped mid-swipe wins over the page the swipe landed on.
+                if pendingTab == nil || pendingTab == index {
+                    pendingTab = nil
+                    selection.wrappedValue = index
+                }
+            }
+            // Not from inside UIKit's own transition.
+            DispatchQueue.main.async { [weak self] in self?.settle() }
         }
 
         /// While a finger moves the pages, tells the bar where they are, so its highlight follows along.
         func follow(_ scroll: UIScrollView) {
-            pagesPan = scroll.panGestureRecognizer
+            self.scroll = scroll
             offsetWatch = scroll.observe(\.contentOffset) { [weak self] scroll, _ in
                 MainActor.assumeIsolated { self?.moved(scroll) }
             }
@@ -114,7 +156,7 @@ struct TabPager: UIViewControllerRepresentable {
         func gestureRecognizer(_ watcher: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
             var view = touch.view
             while let current = view, !(current is UICollectionView) { view = current.superview }
-            guard let list = view as? UICollectionView, let pagesPan else { return false }
+            guard let list = view as? UICollectionView, let pagesPan = scroll?.panGestureRecognizer else { return false }
             for other in list.gestureRecognizers ?? [] where other is UIPanGestureRecognizer
                 && other !== list.panGestureRecognizer && !waitingOn.contains(other) {
                 pagesPan.require(toFail: other)
@@ -128,6 +170,11 @@ struct TabPager: UIViewControllerRepresentable {
             guard width > 0 else { return }
             guard scroll.isDragging || scroll.isDecelerating else {
                 if TabBarState.shared.swipe != nil { TabBarState.shared.swipe = nil }
+                // Back at rest, in case UIKit didn't say a swipe ended (it can skip that on very quick swipes).
+                if swiping, !scroll.isTracking, abs(scroll.contentOffset.x - width) < 0.5 {
+                    swiping = false
+                    DispatchQueue.main.async { [weak self] in self?.settle() }
+                }
                 return
             }
             // The page on screen sits one screen in, with its neighbors either side.

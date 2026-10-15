@@ -83,6 +83,26 @@ final class PagerTests: XCTestCase {
         XCTAssertTrue(waitSelected("Chats"), "back on Menu's first screen, swiping works again")
     }
 
+    /// On a screen pushed on top of a tab, swiping right goes back, from the screen's edge or (iOS 26) anywhere on it.
+    func testSwipeBackFromAPushedScreen() {
+        XCTAssertTrue(app.buttons["tab.Menu"].waitForExistence(timeout: 5))
+        app.buttons["tab.Menu"].tap()
+        let dishes = app.buttons.matching(NSPredicate(format: "label CONTAINS 'calories'"))
+        for (i, fromEdge) in [true, false].enumerated() {
+            let dish = dishes.element(boundBy: 2 + i)
+            XCTAssertTrue(dish.waitForExistence(timeout: 10), "menu loaded")
+            dish.tap()
+            XCTAssertTrue(app.switches.firstMatch.waitForExistence(timeout: 3), "the dish opened")
+            sleep(1)
+            let start = app.coordinate(withNormalizedOffset: CGVector(dx: fromEdge ? 0 : 0.2, dy: 0.5))
+            start.press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)))
+            sleep(1)
+            snap(fromEdge ? "back-from-edge" : "back-from-middle")
+            XCTAssertTrue(app.navigationBars["FoCo"].waitForExistence(timeout: 3), fromEdge ? "edge swipe went back" : "swipe went back")
+            XCTAssertTrue(selected("Menu"))
+        }
+    }
+
     /// Pages still move up for the keyboard: the button under the NetID field stays reachable.
     func testKeyboardKeepsTheSignInButtonReachable() {
         let email = app.textFields["NetID"]
@@ -128,9 +148,14 @@ final class PagerTests: XCTestCase {
         XCTAssertTrue(selected("Menu"))
         app.navigationBars["FoCo"].tap()
         sleep(1)
+        // iOS 26 leaves the row open after a tap elsewhere; swiping it back closes it.
+        if app.buttons["Alert me"].exists && app.buttons["Alert me"].isHittable { dish.swipeLeft(); sleep(1) }
+        snap("dish-row-closed")
 
-        // A row with nothing on that side lets the pages move: swiping left on a dish goes to Chats.
-        dish.swipeLeft()
+        // A row with nothing on that side lets the pages move: swiping left across a dish goes to Chats.
+        let y = dish.frame.midY / app.frame.height
+        swipe(left: true, y: y)
+        snap("after-dish-swipe-left")
         XCTAssertTrue(waitSelected("Chats"), "a dish has no button on its right, so the swipe changes tabs")
     }
 
@@ -163,9 +188,9 @@ final class PagerTests: XCTestCase {
         sleep(3)
     }
 
-    /// Across the top of the page, under the title: clear of rows that slide sideways (the dessert cards, day chips).
-    private func swipe(left: Bool) {
-        let y = 0.17
+    /// A full swipe across the page. By default across the top, under the title: clear of rows that slide sideways
+    /// (the dessert cards, day chips).
+    private func swipe(left: Bool, y: Double = 0.17) {
         let start = app.coordinate(withNormalizedOffset: CGVector(dx: left ? 0.85 : 0.15, dy: y))
         let end = app.coordinate(withNormalizedOffset: CGVector(dx: left ? 0.15 : 0.85, dy: y))
         start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .fast, thenHoldForDuration: 0)
