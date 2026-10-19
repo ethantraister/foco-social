@@ -1124,3 +1124,52 @@ create or replace view public.usage_weekly_retention as
   order by cohort, week;
 
 revoke all on public.usage_by_day, public.usage_weekly_retention from anon, authenticated;
+
+-- ───────────────────────── keep the helpers private (migration 013) ─────────────────────────
+create schema if not exists private;
+-- Signed-in calls still run these inside the privacy rules and the app's read functions, so they need to find them.
+grant usage on schema private to authenticated, service_role;
+
+-- (Skips any already moved, so running this twice is harmless.)
+do $$
+declare f regprocedure;
+begin
+  for f in
+    select p.oid::regprocedure from pg_proc p
+    where p.pronamespace = 'public'::regnamespace
+      and p.proname in ('are_friends', 'is_blocked', 'is_member', 'in_group', 'can_see_plan', 'plan_host',
+                        'marked_me_close', 'in_plan_chat')
+  loop
+    execute format('alter function %s set schema private', f);
+  end loop;
+end $$;
+
+-- Functions that call those by name look in private too.
+do $$
+declare f regprocedure;
+begin
+  for f in
+    select p.oid::regprocedure from pg_proc p
+    where p.pronamespace in ('public'::regnamespace, 'private'::regnamespace)
+      and 'search_path=public' = any (p.proconfig)
+  loop
+    execute format('alter function %s set search_path = public, private', f);
+  end loop;
+end $$;
+
+-- Trigger functions only ever run as triggers; nobody needs to call them.
+do $$
+declare f regprocedure;
+begin
+  for f in
+    select p.oid::regprocedure from pg_proc p
+    where p.pronamespace = 'public'::regnamespace and p.prorettype = 'trigger'::regtype
+  loop
+    execute format('revoke execute on function %s from public, anon, authenticated', f);
+  end loop;
+end $$;
+
+alter function public.first_name(text) set search_path = public;
+alter function public.clock(timestamptz) set search_path = public;
+alter function public.day_clock(timestamptz) set search_path = public;
+

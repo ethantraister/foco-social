@@ -346,6 +346,18 @@ def main():
     s2, rows = call("GET", "/rest/v1/blocks?select=blocked", c_tok)
     check("and unblock them", s == 200 and len(r) == 1 and rows == [], (r, rows))
 
+    print("Helpers stay private")
+    # Migration 013: these answer the privacy rules' yes/no questions. Called directly with anyone's ids, they'd show
+    # who is friends with whom, who blocked whom, and who marked you a close friend.
+    for name, args in [("are_friends", {"a": a_id, "b": b_id}), ("is_blocked", {"a": c_id, "b": a_id}),
+                       ("is_member", {"g": g, "u": b_id}), ("in_group", {"g": g, "u": b_id}),
+                       ("can_see_plan", {"p": str(uuid.uuid4()), "u": b_id}), ("plan_host", {"p": str(uuid.uuid4())}),
+                       ("marked_me_close", {"owner": b_id}), ("in_plan_chat", {"p": str(uuid.uuid4()), "u": b_id})]:
+        s, r = rpc(name, a_tok, args)
+        check(f"{name} can't be called through the API", 400 <= s < 500, (s, r))
+    s, r = rpc("add_plan_host", a_tok)
+    check("trigger functions can't be called through the API", 400 <= s < 500, (s, r))
+
     print("Rows can't change hands")
     x_tok, x_id = login(f"tester.x.{tag}@dartmouth.edu")
     call("POST", "/rest/v1/profiles", x_tok, {"id": x_id, "email": f"tester.x.{tag}@dartmouth.edu", "name": "Tester X"})

@@ -71,7 +71,7 @@ struct OnboardingView: View {
 
     private var restrictions: some View {
         VStack(alignment: .leading, spacing: 20) {
-            title("Anything you avoid?", "We'll hide dishes that don't fit. You can change this any time in My Diet.")
+            title("Anything you avoid?", "We'll hide dishes that don't fit. You can change this anytime in Me → My diet.")
             Text("I eat").font(.headline)
             FlowLayout {
                 ForEach(Diet.allCases) { diet in

@@ -36,7 +36,7 @@ struct FoodDetailView: View {
                 }
                 .sensoryFeedback(.success, trigger: prefs.isWatching(item.name))
             } footer: {
-                Text("You'll get a notification the day it's on the menu.")
+                Text("You'll get a notification whenever it's on the menu.")
             }
 
             Section("Nutrition") {

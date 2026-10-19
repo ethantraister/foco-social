@@ -48,7 +48,7 @@ struct FoodAlertsView: View {
                 }
                 if !suggestions.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Popular").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                        Text("Ideas").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                         FlowLayout {
                             ForEach(suggestions.prefix(8), id: \.self) { food in
                                 Chip(title: food, selected: false, systemImage: "plus") { add(food) }

@@ -46,6 +46,6 @@ struct DietForm: View {
                 }
             }
             .onBackdrop()
-            .navigationTitle("My Diet")
+            .navigationTitle("My diet")
     }
 }

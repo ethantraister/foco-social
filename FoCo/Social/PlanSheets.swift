@@ -893,25 +893,30 @@ struct GroupDetailView: View {
                 }
             }
         }
-        .confirmationDialog("Remove \(removing?.firstName ?? "")?", isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }), titleVisibility: .visible, presenting: removing) { person in
+        // In the middle of the screen, like the app's other confirmations: a title, a line, and two short buttons.
+        .alert("Remove \(removing?.firstName ?? "")?", isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }), presenting: removing) { person in
+            Button("Cancel", role: .cancel) {}
             Button("Remove", role: .destructive) { if let group { Task { await social.remove(person.id, from: group) } } }
         } message: { _ in
             Text("They'll stop seeing the group's plans. Anyone in the group can invite them back.")
         }
-        .confirmationDialog("Make \(newOwner?.firstName ?? "") the owner?", isPresented: Binding(get: { newOwner != nil }, set: { if !$0 { newOwner = nil } }), titleVisibility: .visible, presenting: newOwner) { person in
+        .alert("Make \(newOwner?.firstName ?? "") the owner?", isPresented: Binding(get: { newOwner != nil }, set: { if !$0 { newOwner = nil } }), presenting: newOwner) { person in
+            Button("Cancel", role: .cancel) {}
             Button("Make owner") { if let group { Task { await social.transfer(group, to: person.id) } } }
         } message: { _ in
             Text("You'll become a regular member and won't be able to remove people or delete the group.")
         }
-        .confirmationDialog("Leave \(group?.name ?? "this group")?", isPresented: $confirmLeave, titleVisibility: .visible) {
-            Button("Leave group", role: .destructive) {
+        .alert("Leave \(group?.name ?? "this group")?", isPresented: $confirmLeave) {
+            Button("Cancel", role: .cancel) {}
+            Button("Leave", role: .destructive) {
                 if let group { Task { await social.leave(group) }; dismiss() }
             }
         } message: {
             Text("You'll stop seeing its meal plans. Someone in the group can invite you back.")
         }
-        .confirmationDialog("Delete \(group?.name ?? "this group")?", isPresented: $confirmDelete, titleVisibility: .visible) {
-            Button("Delete group", role: .destructive) {
+        .alert("Delete \(group?.name ?? "this group")?", isPresented: $confirmDelete) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) {
                 if let group { Task { await social.delete(group) }; dismiss() }
             }
         } message: {

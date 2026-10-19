@@ -43,7 +43,7 @@ Dining periods (from Dartmouth Dining): breakfast 7:30–11, lunch 11–4, dinne
 The app no longer offers food requests: it promised they reach Dartmouth Dining, and Dining hasn't agreed to receive them (the digest goes to `DIGEST_TO`). Bring the screen back from git history (`RequestsView.swift`, the dish page's "Ask Dining") once Dining is on board; the server side is unchanged. When it was on, students sent requests (10 a day max, one per food per day) and the `daily-requests` Edge Function (`supabase/functions/daily-requests/`) emailed one summary at 7 AM New York time: each food, how many students, which meals, up to three notes. No names. Setup on the live project:
 
 1. Edge Functions → Secrets: `GMAIL_USER`, `GMAIL_APP_PASSWORD`, `DIGEST_TO` (who gets it; currently focosocial.app@gmail.com until Dining agrees), `CRON_SECRET` (random).
-2. Run `backend/migrations/003_daily_requests_cron.sql` with the two placeholders filled in.
+2. Run `backend/migrations/003_daily_requests_cron.sql` with the two placeholders filled in. (Migration 013 unschedules this job while requests are off; this step turns it back on.)
 3. Test without sending: POST `/functions/v1/daily-requests?preview=1` with the `x-cron-secret` header.
 
 ## Push notifications
@@ -87,6 +87,8 @@ from usage_days;
 ```
 
 `012_foco_caps.sql` makes friends' notifications say FOCO ("Maya is at FOCO"), matching the app. Wording only; safe to run any time.
+
+`013_private_helpers.sql` moves the small yes/no functions behind the privacy rules (`are_friends`, `is_blocked`, `marked_me_close`, …) into a `private` schema the API doesn't publish. Before it, any signed-in student could call them with anyone's ids and learn who is friends with whom, who blocked whom, and who starred them as a close friend. The rules work exactly as before. It also stops trigger functions being callable, pins three helpers' search_path, and switches off the daily food-request email job. Safe to run twice.
 
 The chat tables (`messages`, `chat_reads`, `message_reports`) are still in the database from build 2–4; nothing new writes them, and they're removed with each account.
 

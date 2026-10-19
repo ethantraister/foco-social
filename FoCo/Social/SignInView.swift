@@ -249,7 +249,7 @@ struct ProfileSetupView: View {
 
             Section {
                 Toggle(isOn: $agreed) {
-                    Text("I'll keep it kind: no harassment, hate, nudity, or posting people without asking. Anything that breaks this gets removed and accounts banned.")
+                    Text("I'll keep it kind: no harassment, hate, nudity, or photos of people without asking. Anything that breaks this gets removed and accounts banned.")
                         .font(.subheadline)
                 }
             } header: {
@@ -366,7 +366,7 @@ struct AvatarStack: View {
 
 struct DemoBanner: View {
     var body: some View {
-        Label("Local test server: these people, plans, and messages are made up so you can try things out.", systemImage: "testtube.2")
+        Label("Local test server: these people, plans, and check-ins are made up so you can try things out.", systemImage: "testtube.2")
             .font(.footnote)
             .foregroundStyle(.secondary)
     }

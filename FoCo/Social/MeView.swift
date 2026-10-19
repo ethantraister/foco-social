@@ -15,15 +15,12 @@ struct MeView: View {
                 account
 
                 Section {
-                    NavigationLink { DietForm() } label: { Label("My diet", systemImage: "leaf").labelStyle(.tile(.teal)) }
-                } header: {
-                    SectionTitle("Food")
-                }
-
-                if social.phase == .ready {
-                    Section {
+                    NavigationLink { DietForm() } label: { Label("My diet", systemImage: "carrot.fill").labelStyle(.tile(.orange)) }
+                    if social.phase == .ready {
                         NavigationLink { NotificationSettingsView() } label: { Label("Notifications", systemImage: "bell.badge").labelStyle(.tile(.red)) }
                     }
+                } header: {
+                    SectionTitle("Preferences")
                 }
 
                 Section {

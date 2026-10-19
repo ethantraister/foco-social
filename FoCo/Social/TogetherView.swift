@@ -337,7 +337,6 @@ private struct MyCheckinRow: View {
     }
 }
 
-/// The same switch as in Me, so it's where you'd look for it.
 /// The automatic check-in switch, with a way to fix location access when it can't work. On Together, in Me, and on
 /// the last step of signing up.
 struct AutoCheckinSetting: View {
@@ -593,7 +592,7 @@ struct InviteFriendsSheet: View {
                 Section {
                     FriendPicker(friends: social.recentFriends, selection: $selection, excluded: Set(plan.members.map(\.user.id)))
                 } footer: {
-                    Text("Friends you've eaten with or messaged lately are at the top.")
+                    Text("Friends you've eaten with or invited lately are at the top.")
                 }
             }
             .navigationTitle("Invite friends")
