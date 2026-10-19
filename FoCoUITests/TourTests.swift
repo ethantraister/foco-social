@@ -37,7 +37,7 @@ final class TourTests: XCTestCase {
         app.launchArguments = ["-resetForUITests", "-meal", "dinner"]
         app.launch()
 
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Foco Social")).firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Foco Polo")).firstMatch.waitForExistence(timeout: 5))
         snap("onboarding-welcome")
         app.buttons["Continue"].tap()
         sleep(1)

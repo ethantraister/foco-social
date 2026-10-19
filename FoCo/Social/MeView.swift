@@ -116,7 +116,7 @@ struct MeView: View {
         case .loading:
             Section {
                 if social.loadFailed {
-                    Button("Can't reach Foco Social. Tap to try again.") { Task { await social.bootstrap() } }
+                    Button("Can't reach Foco Polo. Tap to try again.") { Task { await social.bootstrap() } }
                 } else {
                     HStack(spacing: 12) {
                         ProgressView()
@@ -142,13 +142,13 @@ enum AppInfo {
         let info = Bundle.main.infoDictionary
         let version = info?["CFBundleShortVersionString"] as? String ?? "1.0"
         let build = info?["CFBundleVersion"] as? String ?? "1"
-        return "Foco Social \(version) (\(build))"
+        return "Foco Polo \(version) (\(build))"
     }
 
     /// SUPPORT_EMAIL in Info.plist; shown as "Contact us" (App Store apps with profiles need a published way to reach you).
     static var supportEmail: URL? {
         guard let address = supportAddress else { return nil }
-        return URL(string: "mailto:\(address)?subject=Foco%20Social%20\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "")")
+        return URL(string: "mailto:\(address)?subject=Foco%20Polo%20\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "")")
     }
 
     /// PRIVACY_POLICY_URL in Info.plist (the hosted docs/privacy.html); shown as "Privacy policy" once it's set.
@@ -322,7 +322,7 @@ struct NotificationSettingsView: View {
                     Button {
                         openURL(URL(string: UIApplication.openSettingsURLString)!)
                     } label: {
-                        Label("Notifications are off for Foco Social. Tap to turn them on in Settings.", systemImage: "bell.slash")
+                        Label("Notifications are off for Foco Polo. Tap to turn them on in Settings.", systemImage: "bell.slash")
                     }
                 }
             }

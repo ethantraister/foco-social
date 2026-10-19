@@ -87,7 +87,7 @@ final class DesignTourTests: XCTestCase {
         sleep(1)
         app.swipeUp()
         app.switches.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
-        app.buttons["Join Foco Social"].tap()
+        app.buttons["Join Foco Polo"].tap()
         // Signing up ends on adding friends (it can wait).
         XCTAssertTrue(app.navigationBars["Add your friends"].waitForExistence(timeout: 8), "signing up ends on adding friends")
         sleep(1)

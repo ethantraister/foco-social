@@ -250,7 +250,7 @@ private struct AddFriendsCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Add your friends").font(.headline)
-            Text("See when they're at Foco and plan meals together. Find people by name, or text friends who aren't on Foco Social yet.")
+            Text("See when they're at Foco and plan meals together. Find people by name, or text friends who aren't on Foco Polo yet.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
             HStack(spacing: 10) {
@@ -354,8 +354,8 @@ struct AutoCheckinSetting: View {
                 openURL(URL(string: UIApplication.openSettingsURLString)!)
             } label: {
                 Label(presence.isDenied
-                      ? "Location is off for Foco Social, so this can't work. Tap to turn it on in Settings."
-                      : "Set Location to “Always” in Settings so Foco Social can check you in when the app is closed.",
+                      ? "Location is off for Foco Polo, so this can't work. Tap to turn it on in Settings."
+                      : "Set Location to “Always” in Settings so Foco Polo can check you in when the app is closed.",
                       systemImage: "location.slash")
                     .font(.subheadline)
             }

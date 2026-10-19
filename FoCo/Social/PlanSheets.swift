@@ -468,7 +468,7 @@ struct FriendsView: View {
                 Section {
                     InviteByTextButton { Label("Invite friends by text", systemImage: "message") }
                 } footer: {
-                    Text("Opens Messages with an invite to Foco Social. Pick who to send it to.")
+                    Text("Opens Messages with an invite to Foco Polo. Pick who to send it to.")
                 }
 
                 if !welcome {
@@ -699,7 +699,7 @@ struct MemberSearchPicker: View {
         } header: {
             Text("Add people")
         } footer: {
-            Text("Anyone on Foco Social, not just friends. They join once they accept. Group members see the group's plans, but only your friends see when you're at Foco.")
+            Text("Anyone on Foco Polo, not just friends. They join once they accept. Group members see the group's plans, but only your friends see when you're at Foco.")
         }
         .task(id: query) {
             let q = query.trimmingCharacters(in: .whitespaces)
