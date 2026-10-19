@@ -41,7 +41,7 @@ enum NutrisliceAPI {
 
         var result: [String: [FoodItem]] = [:]
         for day in week.days {
-            var station = "FOCO"
+            var station = "Foco"
             var items: [FoodItem] = []
             for item in day.menuItems {
                 if item.isStationHeader || item.isSectionTitle {

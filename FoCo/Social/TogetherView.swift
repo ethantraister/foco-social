@@ -57,11 +57,11 @@ struct TogetherView: View {
                     if social.friendsHere.isEmpty {
                         if social.loadedTogether && !social.friends.isEmpty {
                             Text(social.myCheckin == nil
-                                 ? "None of your friends are at FOCO right now."
+                                 ? "None of your friends are at Foco right now."
                                  : "None of your friends are here yet. They'll see you're here.")
                                 .foregroundStyle(.secondary)
                         } else if social.loadedTogether {
-                            Text("Friends at FOCO show up here.").foregroundStyle(.secondary)
+                            Text("Friends at Foco show up here.").foregroundStyle(.secondary)
                         }
                     } else {
                         ForEach(social.friendsHere) { FriendHereRow(checkin: $0) }
@@ -75,7 +75,7 @@ struct TogetherView: View {
                         }
                     }
                 } header: {
-                    SectionTitle("At FOCO now")
+                    SectionTitle("At Foco now")
                 }
 
                 if social.myHeading != nil || !social.friendsHeading.isEmpty {
@@ -128,7 +128,7 @@ struct TogetherView: View {
                     AutoCheckinSetting()
                     ShareWithSetting()
                 } footer: {
-                    Text("During meals, friends see you're at FOCO when you walk in, and you're checked out when you leave.")
+                    Text("During meals, friends see you're at Foco when you walk in, and you're checked out when you leave.")
                 }
 
                 if social.loadedPeople && social.friends.isEmpty && social.incoming.isEmpty {
@@ -231,9 +231,9 @@ struct OfflineNote: View {
 }
 
 extension View {
-    /// "FOCO is closed at 9:00 PM", for when you pick a time FOCO isn't open.
+    /// "Foco is closed at 9:00 PM", for when you pick a time Foco isn't open.
     func closedAlert(_ time: Binding<Date?>) -> some View {
-        alert(time.wrappedValue.map(FoCoHours.closedTitle) ?? "FOCO is closed",
+        alert(time.wrappedValue.map(FoCoHours.closedTitle) ?? "Foco is closed",
               isPresented: Binding(get: { time.wrappedValue != nil }, set: { if !$0 { time.wrappedValue = nil } }),
               presenting: time.wrappedValue) { _ in
             Button("OK", role: .cancel) {}
@@ -250,7 +250,7 @@ private struct AddFriendsCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Add your friends").font(.headline)
-            Text("See when they're at FOCO and plan meals together. Find people by name, or text friends who aren't on FOCO Social yet.")
+            Text("See when they're at Foco and plan meals together. Find people by name, or text friends who aren't on Foco Social yet.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
             HStack(spacing: 10) {
@@ -315,9 +315,11 @@ private struct MyCheckinRow: View {
                 Avatar(person: checkin.user, size: 44, ring: .dartmouthGreen)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("You're here").font(.headline)
-                    Text([checkin.spot, "until \(checkin.expiresAt.formatted(date: .omitted, time: .shortened))",
-                          checkin.audience == .close ? "close friends" : nil].compactMap { $0 }.joined(separator: " · "))
-                        .font(.subheadline).foregroundStyle(.secondary)
+                    // Which side and who sees it. Not when it runs out: how long you'll stay isn't anyone's business.
+                    let detail = [checkin.spot, checkin.audience == .close ? "close friends" : nil].compactMap { $0 }
+                    if !detail.isEmpty {
+                        Text(detail.joined(separator: " · ")).font(.subheadline).foregroundStyle(.secondary)
+                    }
                 }
                 Spacer()
                 Button("Leave") { Task { await social.checkOut() } }
@@ -352,8 +354,8 @@ struct AutoCheckinSetting: View {
                 openURL(URL(string: UIApplication.openSettingsURLString)!)
             } label: {
                 Label(presence.isDenied
-                      ? "Location is off for FOCO Social, so this can't work. Tap to turn it on in Settings."
-                      : "Set Location to “Always” in Settings so FOCO Social can check you in when the app is closed.",
+                      ? "Location is off for Foco Social, so this can't work. Tap to turn it on in Settings."
+                      : "Set Location to “Always” in Settings so Foco Social can check you in when the app is closed.",
                       systemImage: "location.slash")
                     .font(.subheadline)
             }
@@ -361,7 +363,7 @@ struct AutoCheckinSetting: View {
     }
 }
 
-/// Who sees when you're at FOCO: all friends, or close friends only. Automatic check-in uses it too.
+/// Who sees when you're at Foco: all friends, or close friends only. Automatic check-in uses it too.
 private struct ShareWithSetting: View {
     @Environment(SocialStore.self) private var social
     @State private var share = ShareWith.friends
@@ -370,7 +372,7 @@ private struct ShareWithSetting: View {
         Picker(selection: $share) {
             ForEach(ShareWith.allCases) { Text($0.title).tag($0) }
         } label: {
-            Label("Who sees when I'm at FOCO", systemImage: "person.2.badge.gearshape").labelStyle(.tile(.indigo))
+            Label("Who sees when I'm at Foco", systemImage: "person.2.badge.gearshape").labelStyle(.tile(.indigo))
         }
         .onAppear { share = social.defaultShare }
         .onChange(of: share) { social.defaultShare = share }
@@ -403,7 +405,7 @@ private struct FriendHereRow: View {
     private var detail: String {
         let mins = max(1, Int(Date.now.timeIntervalSince(checkin.startedAt) / 60))
         let here = mins < 60 ? "\(mins) min" : mins % 60 == 0 ? "\(mins / 60) hr" : "\(mins / 60) hr \(mins % 60) min"
-        return [checkin.spot ?? "At FOCO", "here \(here)"].joined(separator: " · ")
+        return [checkin.spot ?? "At Foco", "here \(here)"].joined(separator: " · ")
     }
 }
 

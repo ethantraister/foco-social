@@ -55,7 +55,7 @@ begin
   insert into group_members (group_id, user_id, status, invited_by)
   values ('00000000-0000-4000-b000-000000000002', new.id, 'invited', '00000000-0000-4000-a000-000000000003');
   insert into messages (sender, recipient, body, created_at)
-  values ('00000000-0000-4000-a000-000000000001', new.id, 'hey! want to get dinner at FoCo later?', now() - interval '20 minutes');
+  values ('00000000-0000-4000-a000-000000000001', new.id, 'hey! want to get dinner at Foco later?', now() - interval '20 minutes');
   insert into plan_members (plan_id, user_id, status)
   select id, new.id, 'invited' from plans where id = '00000000-0000-4000-c000-000000000002';
   return new;

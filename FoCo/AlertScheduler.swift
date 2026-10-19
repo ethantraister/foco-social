@@ -30,7 +30,7 @@ enum AlertScheduler {
             let content = UNMutableNotificationContent()
             let names = match.items.map(\.name)
             let when = FoCoCalendar.phrase(date)
-            content.title = "\(match.keyword.capitalized) at FOCO"
+            content.title = "\(match.keyword.capitalized) at Foco"
             content.body = "\(names.prefix(3).joined(separator: ", ")) — \(match.meal.title.lowercased()) \(when) at \(match.items[0].station)."
             content.sound = .default
             var comps = FoCoCalendar.cal.dateComponents([.year, .month, .day, .hour, .minute], from: fire)

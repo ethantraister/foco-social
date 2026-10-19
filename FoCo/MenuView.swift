@@ -65,7 +65,7 @@ struct MenuView: View {
                     menuList
                 }
             }
-            .navigationTitle("FOCO")
+            .navigationTitle("Foco")
             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "Search this week — steak, sushi…")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -99,7 +99,7 @@ struct MenuView: View {
                     Button { tab = AppTab.together.rawValue } label: {
                         HStack(spacing: 10) {
                             Image(systemName: "person.2.fill").foregroundStyle(.tint)
-                            Text("See which friends are at FOCO").font(.subheadline).foregroundStyle(Color.primary)
+                            Text("See which friends are at Foco").font(.subheadline).foregroundStyle(Color.primary)
                             Spacer()
                             Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
                         }

@@ -43,7 +43,7 @@ struct MeView: View {
             .navigationTitle("Me")
             .tabRoot()
             .sheet(isPresented: $editing) { EditProfileSheet() }
-            .sheet(isPresented: $signingIn) { SignInSheet(reason: "Sign in to see when friends are at FOCO and plan meals together.") }
+            .sheet(isPresented: $signingIn) { SignInSheet(reason: "Sign in to see when friends are at Foco and plan meals together.") }
             // Both in the middle of the screen, laid out the same: a title, a line, and two short buttons side by side
             // (a long button label makes iOS stack them).
             .alert("Sign out?", isPresented: $confirmSignOut) {
@@ -108,15 +108,15 @@ struct MeView: View {
                     Label("Invite friends by text", systemImage: "message").labelStyle(.tile(.green))
                 }
                 Toggle(isOn: Bindable(PresenceMonitor.shared).enabled) {
-                    Label("Check in automatically at FOCO", systemImage: "location").labelStyle(.tile(.blue))
+                    Label("Check in automatically at Foco", systemImage: "location").labelStyle(.tile(.blue))
                 }
             } footer: {
-                Text("Friends see you're at FOCO when you walk in during a meal, and you're checked out when you leave.")
+                Text("Friends see you're at Foco when you walk in during a meal, and you're checked out when you leave.")
             }
         case .loading:
             Section {
                 if social.loadFailed {
-                    Button("Can't reach FOCO Social. Tap to try again.") { Task { await social.bootstrap() } }
+                    Button("Can't reach Foco Social. Tap to try again.") { Task { await social.bootstrap() } }
                 } else {
                     HStack(spacing: 12) {
                         ProgressView()
@@ -142,13 +142,13 @@ enum AppInfo {
         let info = Bundle.main.infoDictionary
         let version = info?["CFBundleShortVersionString"] as? String ?? "1.0"
         let build = info?["CFBundleVersion"] as? String ?? "1"
-        return "FOCO Social \(version) (\(build))"
+        return "Foco Social \(version) (\(build))"
     }
 
     /// SUPPORT_EMAIL in Info.plist; shown as "Contact us" (App Store apps with profiles need a published way to reach you).
     static var supportEmail: URL? {
         guard let address = supportAddress else { return nil }
-        return URL(string: "mailto:\(address)?subject=FOCO%20Social%20\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "")")
+        return URL(string: "mailto:\(address)?subject=Foco%20Social%20\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "")")
     }
 
     /// PRIVACY_POLICY_URL in Info.plist (the hosted docs/privacy.html); shown as "Privacy policy" once it's set.
@@ -322,7 +322,7 @@ struct NotificationSettingsView: View {
                     Button {
                         openURL(URL(string: UIApplication.openSettingsURLString)!)
                     } label: {
-                        Label("Notifications are off for FOCO Social. Tap to turn them on in Settings.", systemImage: "bell.slash")
+                        Label("Notifications are off for Foco Social. Tap to turn them on in Settings.", systemImage: "bell.slash")
                     }
                 }
             }
@@ -336,7 +336,7 @@ struct NotificationSettingsView: View {
                 Picker(selection: $settings.arrivals) {
                     ForEach(NotifyScope.allCases) { Text($0.title).tag($0) }
                 } label: {
-                    Label("Friends getting to FOCO", systemImage: "fork.knife").labelStyle(.tile(.orange))
+                    Label("Friends getting to Foco", systemImage: "fork.knife").labelStyle(.tile(.orange))
                 }
                 Toggle(isOn: $settings.joins) { Label("Someone joins me", systemImage: "person.2").labelStyle(.tile(.indigo)) }
             } header: {

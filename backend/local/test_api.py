@@ -1,4 +1,4 @@
-"""End-to-end checks of the FOCO Social API and its privacy rules, run against dev_server.py.
+"""End-to-end checks of the Foco Social API and its privacy rules, run against dev_server.py.
 
     ~/FoCoSocial-devtools/venv/bin/python backend/local/test_api.py
 """
@@ -93,7 +93,7 @@ def main():
 
     print("Check-ins")
     s, r = call("POST", "/rest/v1/checkins", a_tok, {"user_id": a_id, "spot": "Back room"}, {"Prefer": "resolution=merge-duplicates"})
-    check("check in at FOCO", s in (200, 201), r)
+    check("check in at Foco", s in (200, 201), r)
     s, t = rpc("together", b_tok)
     check("a friend sees the check-in", any(c["user"]["id"] == a_id for c in t["checkins"]), t["checkins"])
     c_tok, c_id = login(f"tester.c.{tag}@dartmouth.edu")
@@ -547,7 +547,7 @@ def main():
     check("a quiet going soon doesn't notify anyone", not any(n["kind"] == "going" for n in queued(mark)), queued(mark))
     call("POST", "/rest/v1/checkins", a_tok, {"user_id": a_id, "eta": _mins(15), "expires_at": _mins(35), "started_at": _mins(0, 1), "notify": True}, {"Prefer": "resolution=merge-duplicates"})
     q = [n for n in queued(mark) if n["kind"] == "going"]
-    check("an out-loud going soon notifies friends", q and b_id in q[0]["recipients"] and k_id in q[0]["recipients"] and q[0]["title"] == "Tester is going to FOCO", q)
+    check("an out-loud going soon notifies friends", q and b_id in q[0]["recipients"] and k_id in q[0]["recipients"] and q[0]["title"] == "Tester is going to Foco", q)
     mark = last_id()
     call("POST", "/rest/v1/checkins", a_tok, {"user_id": a_id, "eta": _mins(15), "expires_at": _mins(35), "started_at": _mins(0, 2), "notify": True}, {"Prefer": "resolution=merge-duplicates"})
     check("but not again within 20 minutes", not any(n["kind"] == "going" for n in queued(mark)), queued(mark))
@@ -561,12 +561,12 @@ def main():
 
     mark = last_id()
     call("POST", "/rest/v1/checkins", a_tok, {"user_id": a_id, "eta": None, "expires_at": _mins(45), "started_at": _mins(0, 4)}, {"Prefer": "resolution=merge-duplicates"})
-    check("getting to FOCO doesn't notify friends by default", not any(n["kind"] == "arrival" for n in queued(mark)), queued(mark))
+    check("getting to Foco doesn't notify friends by default", not any(n["kind"] == "arrival" for n in queued(mark)), queued(mark))
     call("POST", "/rest/v1/close_friends", b_tok, {"user_id": b_id, "friend_id": a_id})
     mark = last_id()
     call("POST", "/rest/v1/checkins", a_tok, {"user_id": a_id, "eta": None, "expires_at": _mins(45), "started_at": _mins(0, 5), "spot": "Dark side"}, {"Prefer": "resolution=merge-duplicates"})
     q = [n for n in queued(mark) if n["kind"] == "arrival"]
-    check("only friends who made you a close friend", len(q) == 1 and q[0]["recipients"] == [b_id] and q[0]["title"] == "Tester is at FOCO" and q[0]["body"] == "Dark side", q)
+    check("only friends who made you a close friend", len(q) == 1 and q[0]["recipients"] == [b_id] and q[0]["title"] == "Tester is at Foco" and q[0]["body"] == "Dark side", q)
     call("DELETE", f"/rest/v1/checkins?user_id=eq.{a_id}", a_tok)
 
     mark = last_id()

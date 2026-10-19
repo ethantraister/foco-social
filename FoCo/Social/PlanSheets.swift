@@ -2,7 +2,7 @@ import SwiftUI
 import UserNotifications
 
 /// Plan a meal, or (with `editing`) change one you're hosting. The meal follows from the time you pick,
-/// and times when FOCO is closed are turned away with a popup.
+/// and times when Foco is closed are turned away with a popup.
 struct PlanComposer: View {
     @Environment(SocialStore.self) private var social
     @Environment(\.dismiss) private var dismiss
@@ -66,7 +66,7 @@ struct PlanComposer: View {
                             .foregroundStyle(.secondary)
                             .accessibilityLabel("Meal: \(meal.title)")
                     } else {
-                        Label("FOCO is closed then", systemImage: "moon.zzz")
+                        Label("Foco is closed then", systemImage: "moon.zzz")
                             .font(.subheadline)
                             .foregroundStyle(.red)
                     }
@@ -211,18 +211,18 @@ struct CheckInSheet: View {
                 Section {
                     Toggle("Check me in automatically", isOn: $presence.enabled)
                 } footer: {
-                    Text("When you walk into FOCO during a meal, your friends see you're there, and you're checked out when you leave. Uses your location only near FOCO.")
+                    Text("When you walk into Foco during a meal, your friends see you're there, and you're checked out when you leave. Uses your location only near Foco.")
                 }
                 if social.myCheckin != nil {
                     Section {
-                        Button("I left FOCO", role: .destructive) {
+                        Button("I left Foco", role: .destructive) {
                             Task { await social.checkOut() }
                             dismiss()
                         }
                     }
                 }
             }
-            .navigationTitle("I'm at FOCO")
+            .navigationTitle("I'm at Foco")
             .navigationBarTitleDisplayMode(.inline)
             .onAppear {
                 share = social.defaultShare
@@ -270,7 +270,7 @@ private struct ShareWithPicker: View {
     }
 }
 
-/// "I'll be at FOCO in…": 15 min, 30 min, 1 hour, or a time you pick, which side, who sees it,
+/// "I'll be at Foco in…": 15 min, 30 min, 1 hour, or a time you pick, which side, who sees it,
 /// and whether friends get a notification (out loud) or just see it on Together (quiet).
 struct HeadingSheet: View {
     @Environment(SocialStore.self) private var social
@@ -310,11 +310,11 @@ struct HeadingSheet: View {
                             .environment(\.timeZone, FoCoCalendar.tz)
                     }
                 } header: {
-                    Text("I'll be at FOCO in")
+                    Text("I'll be at Foco in")
                 } footer: {
                     Text(FoCoHours.isOpen(at: eta)
                          ? "Around \(eta.formatted(date: .omitted, time: .shortened)). Friends can tap I'm coming."
-                         : "FOCO is closed at \(eta.formatted(date: .omitted, time: .shortened)).")
+                         : "Foco is closed at \(eta.formatted(date: .omitted, time: .shortened)).")
                 }
 
                 Section("Which side?") {
@@ -426,7 +426,7 @@ struct FriendsView: View {
             } else {
                 if welcome {
                     Section {
-                        Text("Add the people you eat with. You'll see when they're at FOCO, and they'll see you.")
+                        Text("Add the people you eat with. You'll see when they're at Foco, and they'll see you.")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                             .listRowBackground(Color.clear)
@@ -441,14 +441,14 @@ struct FriendsView: View {
                                     notifications = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
                                 }
                             } label: {
-                                Label("Know when friends head to FOCO", systemImage: "bell.badge").labelStyle(.tile(.red))
+                                Label("Know when friends head to Foco", systemImage: "bell.badge").labelStyle(.tile(.red))
                             }
                         }
                         AutoCheckinSetting()
                     } footer: {
                         Text(notifications == .notDetermined
-                             ? "Notifications are only what friends do: going soon, joining you, invites. Automatic check-in shows friends you're at FOCO when you walk in during a meal, nothing else. Change either in Me."
-                             : "Shows friends you're at FOCO when you walk in during a meal, nothing else. Change it anytime in Me.")
+                             ? "Notifications are only what friends do: going soon, joining you, invites. Automatic check-in shows friends you're at Foco when you walk in during a meal, nothing else. Change either in Me."
+                             : "Shows friends you're at Foco when you walk in during a meal, nothing else. Change it anytime in Me.")
                     }
                 }
 
@@ -468,7 +468,7 @@ struct FriendsView: View {
                 Section {
                     InviteByTextButton { Label("Invite friends by text", systemImage: "message") }
                 } footer: {
-                    Text("Opens Messages with an invite to FOCO Social. Pick who to send it to.")
+                    Text("Opens Messages with an invite to Foco Social. Pick who to send it to.")
                 }
 
                 if !welcome {
@@ -699,7 +699,7 @@ struct MemberSearchPicker: View {
         } header: {
             Text("Add people")
         } footer: {
-            Text("Anyone on FOCO Social, not just friends. They join once they accept. Group members see the group's plans, but only your friends see when you're at FOCO.")
+            Text("Anyone on Foco Social, not just friends. They join once they accept. Group members see the group's plans, but only your friends see when you're at Foco.")
         }
         .task(id: query) {
             let q = query.trimmingCharacters(in: .whitespaces)

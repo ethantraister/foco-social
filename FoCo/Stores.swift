@@ -60,7 +60,7 @@ final class MenuStore {
             errors[wk] = nil
             saveCache()
         } catch {
-            errors[wk] = "Couldn't reach the FOCO menu. Check your connection and pull down to try again."
+            errors[wk] = "Couldn't reach the Foco menu. Check your connection and pull down to try again."
         }
     }
 

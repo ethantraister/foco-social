@@ -11,7 +11,7 @@ enum AppInvite {
     }
 
     static func message(from me: Person?) -> String {
-        var text = "Get FOCO Social so we can see when we're both at FOCO and plan meals together. Sign in with your NetID"
+        var text = "Get Foco Social so we can see when we're both at Foco and plan meals together. Sign in with your NetID"
         if let me { text += ", then add me: \(me.name)" }
         text += "."
         if let link { text += "\n\n\(link.absoluteString)" }

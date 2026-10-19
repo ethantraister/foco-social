@@ -209,7 +209,7 @@ struct TabPage: View {
         switch tab {
         case .menu: MenuView()
         case .together:
-            SignInGate(reason: "See which friends are at FOCO right now, make meal plans, and get invited to team dinners.") { TogetherView() }
+            SignInGate(reason: "See which friends are at Foco right now, make meal plans, and get invited to team dinners.") { TogetherView() }
         case .me: MeView()
         }
     }

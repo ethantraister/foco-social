@@ -37,7 +37,7 @@ final class TourTests: XCTestCase {
         app.launchArguments = ["-resetForUITests", "-meal", "dinner"]
         app.launch()
 
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "FOCO Social")).firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Foco Social")).firstMatch.waitForExistence(timeout: 5))
         snap("onboarding-welcome")
         app.buttons["Continue"].tap()
         sleep(1)
@@ -55,7 +55,7 @@ final class TourTests: XCTestCase {
         app.buttons["Start eating"].tap()
         allowNotificationsIfAsked()
 
-        XCTAssertTrue(app.navigationBars["FOCO"].waitForExistence(timeout: 5), "signed out, the app opens on the menu")
+        XCTAssertTrue(app.navigationBars["Foco"].waitForExistence(timeout: 5), "signed out, the app opens on the menu")
         XCTAssertTrue(app.buttons["tab.Menu"].isSelected)
         sleep(4)
         snap("menu-dinner")
@@ -86,7 +86,7 @@ final class TourTests: XCTestCase {
 
         // Food alerts live behind the bell on the menu: the dish just followed is there.
         app.swipeDown(); app.swipeDown()
-        app.navigationBars["FOCO"].buttons["Food alerts"].tap()
+        app.navigationBars["Foco"].buttons["Food alerts"].tap()
         XCTAssertTrue(app.navigationBars["Food alerts"].waitForExistence(timeout: 3), "the bell opens food alerts")
         XCTAssertTrue(app.buttons["Steak, following"].exists, "foods picked during onboarding are followed")
         sleep(2)
@@ -128,7 +128,7 @@ final class TourTests: XCTestCase {
                                "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXL"]
         app.launch()
         tab("Menu")
-        XCTAssertTrue(app.navigationBars["FOCO"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Foco"].waitForExistence(timeout: 5))
         sleep(4)
         snap("large-menu")
         app.swipeUp()
@@ -143,7 +143,7 @@ final class TourTests: XCTestCase {
         app.launchArguments = ["-resetForUITests", "-onboarded", "<true/>", "-meal", "dinner"]
         app.launch()
         tab("Menu")
-        XCTAssertTrue(app.navigationBars["FOCO"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Foco"].waitForExistence(timeout: 5))
         sleep(4)
         for tab in ["Menu", "Me"] {
             self.tab(tab)
@@ -161,7 +161,7 @@ final class TourTests: XCTestCase {
         app.launchArguments = ["-resetForUITests", "-onboarded", "<true/>", "-meal", "lunch"]
         app.launch()
         tab("Menu")
-        XCTAssertTrue(app.navigationBars["FOCO"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Foco"].waitForExistence(timeout: 5))
         sleep(4)
         snap("dark-menu")
         app.swipeUp()

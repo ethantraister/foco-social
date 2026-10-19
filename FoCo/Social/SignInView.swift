@@ -11,7 +11,7 @@ struct SignInGate<Content: View>: View {
 
     var body: some View {
         switch social.phase {
-        // Just joined: adding friends is the last step, since seeing them at FOCO is the point. Skippable.
+        // Just joined: adding friends is the last step, since seeing them at Foco is the point. Skippable.
         case .ready where social.showWelcome:
             NavigationStack {
                 FriendsView(embedded: true, welcome: true)
@@ -57,7 +57,7 @@ private struct ProfileLoadingView: View {
         Group {
             if social.loadFailed {
                 ContentUnavailableView {
-                    Label("Can't reach FOCO Social", systemImage: "wifi.exclamationmark")
+                    Label("Can't reach Foco Social", systemImage: "wifi.exclamationmark")
                 } description: {
                     Text("Check your connection and try again.")
                 } actions: {
@@ -265,7 +265,7 @@ struct ProfileSetupView: View {
                     }
                 } label: {
                     ZStack {
-                        Text("Join FOCO Social").font(.headline).opacity(working ? 0 : 1)
+                        Text("Join Foco Social").font(.headline).opacity(working ? 0 : 1)
                         if working { ProgressView() }
                     }
                     .frame(maxWidth: .infinity, minHeight: 44)

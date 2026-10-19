@@ -70,9 +70,9 @@ final class SocialTourTests: XCTestCase {
         }
     }
 
-    /// A time FOCO is closed gets a popup instead of going through. Returns true if that happened (and dismisses it).
+    /// A time Foco is closed gets a popup instead of going through. Returns true if that happened (and dismisses it).
     private func closedPopupShown() -> Bool {
-        let alert = app.alerts.matching(NSPredicate(format: "label BEGINSWITH 'FOCO is closed'")).firstMatch
+        let alert = app.alerts.matching(NSPredicate(format: "label BEGINSWITH 'Foco is closed'")).firstMatch
         guard alert.waitForExistence(timeout: 2) else { return false }
         snap("foco-closed")
         alert.buttons["OK"].tap()
@@ -84,9 +84,9 @@ final class SocialTourTests: XCTestCase {
         app.launch()
 
         // Signed out, it opens on the menu, with a way into the friends side.
-        XCTAssertTrue(app.navigationBars["FOCO"].waitForExistence(timeout: 5), "signed out, the app opens on the menu")
+        XCTAssertTrue(app.navigationBars["Foco"].waitForExistence(timeout: 5), "signed out, the app opens on the menu")
         XCTAssertFalse(app.buttons["tab.Feed"].exists, "there's no feed")
-        let teaser = app.buttons["See which friends are at FOCO"]
+        let teaser = app.buttons["See which friends are at Foco"]
         XCTAssertTrue(teaser.waitForExistence(timeout: 5), "the menu points to the friends side")
         snap("signed-out-menu")
         teaser.tap()
@@ -115,7 +115,7 @@ final class SocialTourTests: XCTestCase {
         let agree = app.switches.firstMatch
         agree.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
         snap("profile-setup")
-        app.buttons["Join FOCO Social"].tap()
+        app.buttons["Join Foco Social"].tap()
         // Signing up ends on adding friends (it can wait).
         XCTAssertTrue(app.navigationBars["Add your friends"].waitForExistence(timeout: 8), "signing up ends on adding friends")
         XCTAssertTrue(app.searchFields["Find people by name"].exists, "with search by name")
@@ -174,7 +174,7 @@ final class SocialTourTests: XCTestCase {
         let coming = app.buttons["I'm coming"].firstMatch
         for _ in 0..<4 { app.swipeDown() }
         scrollIntoView(coming)
-        XCTAssertTrue(coming.waitForExistence(timeout: 5), "a friend heading to FOCO can be joined")
+        XCTAssertTrue(coming.waitForExistence(timeout: 5), "a friend heading to Foco can be joined")
         snap("heading-friends")
         coming.tap()
         sleep(2)
@@ -297,13 +297,13 @@ final class SocialTourTests: XCTestCase {
         app.buttons["Cancel"].tap()
     }
 
-    /// Walk into FOCO, get checked in; walk out, get checked out. Needs a meal to be on (Eastern time).
+    /// Walk into Foco, get checked in; walk out, get checked out. Needs a meal to be on (Eastern time).
     func testAutoCheckIn() throws {
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = TimeZone(identifier: "America/New_York")!
         let c = cal.dateComponents([.hour, .minute], from: .now)
         let m = (c.hour ?? 0) * 60 + (c.minute ?? 0)
-        try XCTSkipUnless((7 * 60 + 40..<20 * 60 + 20).contains(m), "FOCO isn't serving right now")
+        try XCTSkipUnless((7 * 60 + 40..<20 * 60 + 20).contains(m), "Foco isn't serving right now")
 
         let baker = XCUILocation(location: CLLocation(latitude: 43.70573, longitude: -72.28869))
         let foco = XCUILocation(location: CLLocation(latitude: 43.70311, longitude: -72.29090))
@@ -320,7 +320,7 @@ final class SocialTourTests: XCTestCase {
         sleep(2)
         allowAlerts()
         snap("auto-on")
-        app.swipeDown()   // back up to "At FOCO now"
+        app.swipeDown()   // back up to "At Foco now"
         app.swipeDown()
 
         XCUIDevice.shared.location = foco
@@ -351,13 +351,13 @@ final class SocialTourTests: XCTestCase {
         button(weekday).tap()
         XCTAssertTrue(app.staticTexts["Meal: Dinner"].waitForExistence(timeout: 3), "6 PM is dinner, picked for you")
         XCTAssertFalse(app.segmentedControls.firstMatch.exists, "no meal picker to get wrong")
-        // 9 PM: between dinner and Late Night, FOCO is closed.
+        // 9 PM: between dinner and Late Night, Foco is closed.
         app.datePickers.firstMatch.tap()
         let hour = app.pickerWheels.element(boundBy: 0)
         if hour.waitForExistence(timeout: 3) {
             hour.adjust(toPickerWheelValue: "9")
             app.navigationBars.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-            XCTAssertTrue(app.staticTexts["FOCO is closed then"].waitForExistence(timeout: 3), "a closed time says so")
+            XCTAssertTrue(app.staticTexts["Foco is closed then"].waitForExistence(timeout: 3), "a closed time says so")
             app.buttons["Post"].tap()
             XCTAssertTrue(closedPopupShown(), "and Post explains it in a popup")
             app.datePickers.firstMatch.tap()
@@ -477,7 +477,7 @@ final class SocialTourTests: XCTestCase {
         sleep(1)
         app.swipeUp()
         app.switches.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
-        app.buttons["Join FOCO Social"].tap()
+        app.buttons["Join Foco Social"].tap()
         // Signing up ends on adding friends (it can wait).
         XCTAssertTrue(app.navigationBars["Add your friends"].waitForExistence(timeout: 8), "signing up ends on adding friends")
         app.navigationBars.buttons.matching(NSPredicate(format: "label IN {'Later', 'Done'}")).firstMatch.tap()
@@ -510,7 +510,7 @@ final class SocialTourTests: XCTestCase {
             sleep(1)
             app.swipeUp()
             app.switches.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
-            app.buttons["Join FOCO Social"].tap()
+            app.buttons["Join Foco Social"].tap()
             // Signing up ends on adding friends (it can wait).
             if app.navigationBars["Add your friends"].waitForExistence(timeout: 8) {
                 app.navigationBars.buttons.matching(NSPredicate(format: "label IN {'Later', 'Done'}")).firstMatch.tap()
@@ -665,7 +665,7 @@ final class SocialTourTests: XCTestCase {
         tab("Menu")
         sleep(3)
         func friendsLine() -> Bool { ["Jordan", "Sam", "Maya", "Theo"].contains { button($0).exists } }
-        // Once tonight's dinner is over (and FOCO is closed, so no one's there), the demo team dinner is tomorrow's.
+        // Once tonight's dinner is over (and Foco is closed, so no one's there), the demo team dinner is tomorrow's.
         if !friendsLine() {
             button("Tomorrow").tap()
             sleep(2)

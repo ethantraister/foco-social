@@ -63,7 +63,7 @@ struct OnboardingView: View {
 
     private var welcome: some View {
         VStack(alignment: .leading, spacing: 20) {
-            BrandHeader(title: "FOCO Social", subtitle: "What's on at '53 Commons, and who you're eating with.")
+            BrandHeader(title: "Foco Social", subtitle: "What's on at '53 Commons, and who you're eating with.")
             Text("Tell us what you eat and the dishes you like. We'll filter the menu and let you know when your favorites are on.")
                 .foregroundStyle(.secondary)
         }

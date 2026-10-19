@@ -4,7 +4,7 @@ import Observation
 import UIKit
 import UserNotifications
 
-/// Checks you in when you walk into FOCO during a meal and out when you leave.
+/// Checks you in when you walk into Foco during a meal and out when you leave.
 @MainActor @Observable
 final class PresenceMonitor: NSObject, CLLocationManagerDelegate {
     static let shared = PresenceMonitor()
@@ -110,7 +110,7 @@ final class PresenceMonitor: NSObject, CLLocationManagerDelegate {
     private func notifyCheckedIn(_ meal: Meal) {
         guard UIApplication.shared.applicationState != .active else { return }
         let content = UNMutableNotificationContent()
-        content.title = "You're checked in at FOCO"
+        content.title = "You're checked in at Foco"
         content.body = "Friends can see you're at \(meal.title.lowercased()). Open the app to say dark side, light side, or upstairs."
         content.interruptionLevel = .passive
         UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "autoCheckin", content: content, trigger: nil))

@@ -57,7 +57,7 @@ enum Meal: String, CaseIterable, Identifiable, Codable {
         }
     }
 
-    /// The meal FOCO is serving right now, if any, and when it ends.
+    /// The meal Foco is serving right now, if any, and when it ends.
     static func serving(at date: Date = .now) -> (meal: Meal, ends: Date)? {
         let c = FoCoCalendar.cal.dateComponents([.hour, .minute], from: date)
         var minutes = (c.hour ?? 0) * 60 + (c.minute ?? 0)
@@ -66,7 +66,7 @@ enum Meal: String, CaseIterable, Identifiable, Codable {
         return (meal, date.addingTimeInterval(Double(meal.endMinute - minutes) * 60))
     }
 
-    /// The meal FOCO serves at a time, or nil when it's closed (8:30–9:30 PM and 1:30–7:30 AM).
+    /// The meal Foco serves at a time, or nil when it's closed (8:30–9:30 PM and 1:30–7:30 AM).
     static func at(_ date: Date) -> Meal? { serving(at: date)?.meal }
 
     var isOverToday: Bool {
@@ -202,22 +202,22 @@ struct SearchHit: Identifiable, Hashable {
     var date: Date { FoCoCalendar.date(from: day) ?? .now }
 }
 
-/// When FOCO is open: 7:30 AM to 8:30 PM, then Late Night 9:30 PM to 1:30 AM.
+/// When Foco is open: 7:30 AM to 8:30 PM, then Late Night 9:30 PM to 1:30 AM.
 enum FoCoHours {
     static func isOpen(at date: Date) -> Bool { Meal.at(date) != nil }
 
-    /// "FOCO is closed at 9:00 PM" / "Late Night starts at 9:30 PM.", for the popup when you pick a closed time.
+    /// "Foco is closed at 9:00 PM" / "Late Night starts at 9:30 PM.", for the popup when you pick a closed time.
     static func closedTitle(at date: Date) -> String {
-        "FOCO is closed at \(date.formatted(Date.FormatStyle(date: .omitted, time: .shortened, timeZone: FoCoCalendar.tz)))"
+        "Foco is closed at \(date.formatted(Date.FormatStyle(date: .omitted, time: .shortened, timeZone: FoCoCalendar.tz)))"
     }
 
     static func closedMessage(at date: Date) -> String {
         let c = FoCoCalendar.cal.dateComponents([.hour, .minute], from: date)
         let minutes = (c.hour ?? 0) * 60 + (c.minute ?? 0)
         if minutes >= 20 * 60 + 30 && minutes < 21 * 60 + 30 {
-            return "Dinner ends at 8:30 PM and Late Night starts at 9:30 PM. Pick a time when FOCO is open."
+            return "Dinner ends at 8:30 PM and Late Night starts at 9:30 PM. Pick a time when Foco is open."
         }
-        return "FOCO is closed overnight, after Late Night ends at 1:30 AM. It opens at 7:30 AM."
+        return "Foco is closed overnight, after Late Night ends at 1:30 AM. It opens at 7:30 AM."
     }
 }
 

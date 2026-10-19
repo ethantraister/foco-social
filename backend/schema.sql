@@ -695,7 +695,7 @@ begin
   if new.joining is not null and new.joining <> new.user_id and are_friends(new.joining, new.user_id)
      and not is_blocked(new.joining, new.user_id) and wants(new.joining, 'joins') then
     perform queue_push(array[new.joining], who || ' is joining you',
-                       case when new.eta is null then 'At FOCO now' else 'At FOCO around ' || clock(new.eta) end,
+                       case when new.eta is null then 'At Foco now' else 'At Foco around ' || clock(new.eta) end,
                        '{"tab": "together"}', null, 'join');
   end if;
 
@@ -704,14 +704,14 @@ begin
     and (new.audience = 'friends' or is_close(new.user_id, f))
     and wants(f, case when new.eta is null then 'arrivals' else 'going' end, new.user_id);
 
-  -- At most one "going" and one "at FOCO" notification per person every 20 minutes, however often they tap.
+  -- At most one "going" and one "at Foco" notification per person every 20 minutes, however often they tap.
   if new.eta is not null and new.notify
      and not exists (select 1 from push_queue q where q.sender = new.user_id and q.kind = 'going' and q.created_at > now() - interval '20 minutes') then
-    perform queue_push(whom, who || ' is going to FOCO', 'Around ' || clock(new.eta) || coalesce(' · ' || new.spot, ''),
+    perform queue_push(whom, who || ' is going to Foco', 'Around ' || clock(new.eta) || coalesce(' · ' || new.spot, ''),
                        '{"tab": "together"}', null, 'going');
   elsif new.eta is null
      and not exists (select 1 from push_queue q where q.sender = new.user_id and q.kind = 'arrival' and q.created_at > now() - interval '20 minutes') then
-    perform queue_push(whom, who || ' is at FOCO', coalesce(new.spot, 'Just got there'), '{"tab": "together"}', null, 'arrival');
+    perform queue_push(whom, who || ' is at Foco', coalesce(new.spot, 'Just got there'), '{"tab": "together"}', null, 'arrival');
   end if;
   return new;
 end $$;
