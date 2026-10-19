@@ -26,7 +26,7 @@ function compose(rows: Row[], day: string) {
   const total = rows.reduce((n, r) => n + r.ids.length, 0);
   const subject = `FOCO food requests from students, ${day} (${total} request${total === 1 ? "" : "s"})`;
   const intro = `Here's what students asked '53 Commons to serve, collected through the FOCO Social app since the last email. Each line counts students, not names.`;
-  const footer = `Sent automatically once a day by FOCO Social, a student-made app. It isn't run by Dartmouth Dining. Reply to this email to reach the student who runs it.`;
+  const footer = `Sent automatically once a day by FOCO Social. Reply to this email to reach the person who runs it.`;
 
   const lines = rows.map((r, i) => {
     const meals = Object.entries(r.meals ?? {}).sort((a, b) => b[1] - a[1]).map(([m, n]) => `${mealNames[m] ?? m} ×${n}`).join(", ");

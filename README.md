@@ -1,14 +1,14 @@
-# FoCo Social (v2)
+# FOCO Social (v2)
 
-See which friends are at FoCo, and what's on. Two things, done well: **Together** (who's there, who's going soon and to which side, plans for later) and the **Menu** (what's on, desserts, diet filters, alerts for favorite foods). Everything else is settings. See `docs/strategy.md` for why. v1 (menu only) lives in `~/FoCoApp`. The two apps have different bundle IDs, so both can be installed side by side.
+See which friends are at FOCO, and what's on. Two things, done well: **Together** (who's there, who's going soon and to which side, plans for later) and the **Menu** (what's on, desserts, diet filters, alerts for favorite foods). Everything else is settings. See `docs/strategy.md` for why. v1 (menu only) lives in `~/FoCoApp`. The two apps have different bundle IDs, so both can be installed side by side.
 
 ## Tabs
 
 | Tab | What it does |
 |---|---|
-| **Menu** | Today's FoCo menu by station: each station's main dishes, with "More from <station>" for sides and everyday items (pizza counts as everyday). Desserts get their own section at the top. Plus a line like "Jordan and 2 others are eating dinner" when friends are going |
-| **Together** (the big middle button; the app opens here) | Invites for you (meal plans and group invites) · "Going soon" (15 min, 30 min, 1 hour, or a time you pick; which side; quiet or out loud; all friends or close friends) · friends at FoCo now and heading over, with "I'm coming" · plans (tap one for who's coming and to text about it; Going / Maybe / Can't, tap again to take it back) · automatic check-in |
-| **Me** | Profile, friends and groups, invite friends by text, check in automatically, diet, food alerts, notifications, About (community rules, blocked people, privacy, contact), sign out, delete account |
+| **Menu** | Today's FOCO menu by station: each station's main dishes, with "More from <station>" for sides and everyday items (pizza counts as everyday). Desserts get their own section at the top. Plus a line like "Jordan and 2 others are eating dinner" when friends are going |
+| **Together** (the big middle button; the app opens here) | Invites for you (meal plans and group invites) · "Going soon" (15 min, 30 min, 1 hour, or a time you pick; which side; quiet or out loud; all friends or close friends) · friends at FOCO now and heading over, with "I'm coming" · plans (tap one for who's coming and to text about it; Going / Maybe / Can't, tap again to take it back) · automatic check-in |
+| **Me** | Profile, friends and groups, invite friends by text, check in automatically, diet, notifications, About (blocked people, privacy policy link, contact), sign out, delete account |
 
 Food alerts (follow a food, see when it's on next) open from the bell on the menu, or by swiping right on a dish. There's no in-app chat: a plan's **Text about this plan** opens Messages with it written out, so conversations stay in the group chats people already have. Press and hold anyone's name to report (an email to `SUPPORT_EMAIL`) or block them. Signing up ends on "Add your friends" (skippable), since seeing friends at FOCO is the point.
 
@@ -16,7 +16,7 @@ Swipe sideways anywhere on a tab's first screen to move to the tab beside it, in
 
 The Menu (and food alerts) work without an account. Together asks you to sign in with your NetID: the app emails a 6-digit code to NetID@dartmouth.edu (no password). Losing signal never signs you out; the app opens to what it last loaded.
 
-FoCo is open 7:30 AM–8:30 PM and 9:30 PM–1:30 AM. Plans, going soon, and checking in by hand turn away times when it's closed, with a popup saying when it opens. A plan's meal (breakfast, lunch, dinner, late night) follows from its time.
+FOCO is open 7:30 AM–8:30 PM and 9:30 PM–1:30 AM. Plans, going soon, and checking in by hand turn away times when it's closed, with a popup saying when it opens. A plan's meal (breakfast, lunch, dinner, late night) follows from its time.
 
 **Invite friends by text** (Friends, the Me tab, or the Together tab when you have no friends yet) opens Messages with an invite already written. Put the App Store or TestFlight link in `APP_STORE_URL` in `Info.plist` once there is one, and the invite includes it.
 
@@ -34,7 +34,7 @@ Then open `FoCo.xcodeproj` in Xcode and press ▶ with an iPhone simulator selec
 
 ## Automatic check-in
 
-Off until you turn it on (Together tab or Me tab). iOS watches a 70 m circle around '53 Commons; when you enter during a dining period, the app takes one precise reading (within 60 m of the building) and checks you in for up to 2 hours. Leaving the circle checks you out. Tapping Leave while still inside stops it from re-checking you in until you walk out. Friends see only "at FoCo" and the room, never coordinates. Needs Location set to "Always" to work with the app closed.
+Off until you turn it on (Together tab or Me tab). iOS watches a 70 m circle around '53 Commons; when you enter during a dining period, the app takes one precise reading (within 60 m of the building) and checks you in for up to 2 hours. Leaving the circle checks you out. Tapping Leave while still inside stops it from re-checking you in until you walk out. Friends see only "at FOCO" and the room, never coordinates. Needs Location set to "Always" to work with the app closed.
 
 Dining periods (from Dartmouth Dining): breakfast 7:30–11, lunch 11–4, dinner 4–8:30, late night 9:30 PM–1:30 AM.
 
@@ -48,7 +48,7 @@ The app no longer offers food requests: it promised they reach Dartmouth Dining,
 
 ## Push notifications
 
-Friends' going soon (only when they choose Notify friends), getting to FoCo (close friends by default), someone joining you, meal invites and changes, group invites and team meals, and messages. Each person picks what they get in Me → Notifications. The "Still a maybe?" reminder 30 minutes before a plan is local to the phone, with Going / Can't make it buttons on the notification.
+Friends' going soon (only when they choose Notify friends), getting to FOCO (close friends by default), someone joining you, meal invites and changes, and group invites and team meals. Each person picks what they get in Me → Notifications. The "Still a maybe?" reminder 30 minutes before a plan is local to the phone, with Going / Can't make it buttons on the notification.
 
 How it works: database triggers (migration `010`) put each notification in `push_queue` and call the `push` Edge Function (`supabase/functions/push/`), which sends it through Apple and forgets phones that deleted the app. The app registers its push token with `register_device()` after sign-in and removes it on sign-out. Builds installed from Xcode use Apple's sandbox; TestFlight and App Store builds use production.
 
@@ -121,7 +121,7 @@ The local server has two test-only helpers: `POST /dev/offline?seconds=N` drops 
 
 ## What's not built yet
 
-- **Crowd meter** (how busy FoCo is). Left out on purpose until enough people use the app for a count to mean something.
+- **Crowd meter** (how busy FOCO is). Left out on purpose until enough people use the app for a count to mean something.
 - **A moderation dashboard.** Reports arrive by email (press and hold someone's name → Report); old reported messages are in `message_reports`.
 - **The old feed's data.** The Feed tab is gone; the `posts` tables are still in the database (nothing reads them) and are removed with each account.
 
