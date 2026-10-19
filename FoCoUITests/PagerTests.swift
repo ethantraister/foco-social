@@ -118,6 +118,13 @@ final class PagerTests: XCTestCase {
         // Lists only make rows as they scroll into view, and the team dinner is under "Coming up".
         for _ in 0..<6 where !(plan.exists && plan.isHittable) { app.swipeUp(); sleep(1) }
         XCTAssertTrue(plan.waitForExistence(timeout: 5), "the demo team dinner")
+        // Clear of the bottom bar, so the swipe starts on the row.
+        let bar = app.otherElements["tabBar"]
+        for _ in 0..<4 where plan.frame.maxY > bar.frame.minY - 12 {
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.6))
+                .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.4)))
+            sleep(1)
+        }
         plan.swipeLeft()
         sleep(1)
         snap("after-plan-swipe")
