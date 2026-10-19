@@ -10,7 +10,7 @@ See which friends are at FoCo, and what's on. Two things, done well: **Together*
 | **Together** (the big middle button; the app opens here) | Invites for you (meal plans and group invites) · "Going soon" (15 min, 30 min, 1 hour, or a time you pick; which side; quiet or out loud; all friends or close friends) · friends at FoCo now and heading over, with "I'm coming" · plans (tap one for who's coming and to text about it; Going / Maybe / Can't, tap again to take it back) · automatic check-in |
 | **Me** | Profile, friends and groups, invite friends by text, check in automatically, diet, food alerts, notifications, About (community rules, blocked people, privacy, contact), sign out, delete account |
 
-Food alerts (follow a food, see when it's on next) open from the bell on the menu, or by swiping right on a dish. There's no in-app chat: a plan's **Text about this plan** opens Messages with it written out, so conversations stay in the group chats people already have. Press and hold anyone's name to report (an email to `SUPPORT_EMAIL`) or block them. Signing up ends on "Add your friends" (skippable), since seeing friends at FoCo is the point.
+Food alerts (follow a food, see when it's on next) open from the bell on the menu, or by swiping right on a dish. There's no in-app chat: a plan's **Text about this plan** opens Messages with it written out, so conversations stay in the group chats people already have. Press and hold anyone's name to report (an email to `SUPPORT_EMAIL`) or block them. Signing up ends on "Add your friends" (skippable), since seeing friends at FOCO is the point.
 
 Swipe sideways anywhere on a tab's first screen to move to the tab beside it, in the bar's order (like Instagram). On a screen pushed on top (a dish, a plan), a sideways swipe goes back instead, and a row that slides open (Remove, Unfollow, Alert me) opens rather than changing tabs.
 
@@ -86,6 +86,8 @@ select count(distinct user_id) filter (where day = current_date) * 1.0
 from usage_days;
 ```
 
+`012_foco_caps.sql` makes friends' notifications say FOCO ("Maya is at FOCO"), matching the app. Wording only; safe to run any time.
+
 The chat tables (`messages`, `chat_reads`, `message_reports`) are still in the database from build 2–4; nothing new writes them, and they're removed with each account.
 
 ## Tests
@@ -112,7 +114,7 @@ The local server has two test-only helpers: `POST /dev/offline?seconds=N` drops 
 ## Before submitting to the App Store
 
 1. **App Review account.** Reviewers can't receive a Dartmouth email, so the NetID in `REVIEW_NETID` (`focoreview`) signs in with a password instead of a code. Create it in Supabase: Authentication → Users → Add user → `focoreview@dartmouth.edu`, a strong password, Auto Confirm User. Give the NetID and password to Apple in App Store Connect → App Review Information. Consider adding it as a friend and posting a plan, so the reviewer sees the social side working.
-2. **Privacy policy URL.** Host `docs/privacy.html` (GitHub Pages, Google Sites) and put its address in App Store Connect. The same text is in the app under Me → About → Privacy. In App Privacy, declare: email address, name, user ID, photos, and other user content, linked to the user, for app functionality; and product interaction (the daily feature counts), linked to the user, for analytics. None of it is tracking. This matches `PrivacyInfo.xcprivacy`. (Builds 1–4 also declared emails or text messages for the chats; that can come off once no chat build is in use.)
+2. **Privacy policy URL.** Host `docs/privacy.html` (GitHub Pages, Google Sites) and put its address in App Store Connect and in `PRIVACY_POLICY_URL` in `Info.plist`; the app links to it from Me → About → Privacy policy (Apple requires the link inside the app too). In App Privacy, declare: email address, name, user ID, photos, and other user content, linked to the user, for app functionality; and product interaction (the daily feature counts), linked to the user, for analytics. None of it is tracking. This matches `PrivacyInfo.xcprivacy`. (Builds 1–4 also declared emails or text messages for the chats; that can come off once no chat build is in use.)
 3. **Contact.** `SUPPORT_EMAIL` in `Info.plist` (now focosocial.app@gmail.com) is the Me → About → Contact us link. Apps with profiles people can report must publish a way to reach you.
 4. **Permissions from Dartmouth** for the D-Pine logo, the name, and using Dining's menu feed.
 5. Export compliance is already answered in the build (`ITSAppUsesNonExemptEncryption = NO`: the app only uses HTTPS).

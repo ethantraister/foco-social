@@ -16,7 +16,7 @@ final class PagerTests: XCTestCase {
     func testSwipeBetweenTabs() {
         XCTAssertTrue(app.buttons["tab.Menu"].waitForExistence(timeout: 5))
         XCTAssertTrue(selected("Menu"), "signed out, it opens on the menu")
-        XCTAssertTrue(app.navigationBars["FoCo"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.navigationBars["FOCO"].waitForExistence(timeout: 3))
         snap("menu")
         swipe(left: false)  // the first page: nowhere further to go
         XCTAssertTrue(waitSelected("Menu"))
@@ -93,7 +93,7 @@ final class PagerTests: XCTestCase {
             start.press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)))
             sleep(1)
             snap(fromEdge ? "back-from-edge" : "back-from-middle")
-            XCTAssertTrue(app.navigationBars["FoCo"].waitForExistence(timeout: 3), fromEdge ? "edge swipe went back" : "swipe went back")
+            XCTAssertTrue(app.navigationBars["FOCO"].waitForExistence(timeout: 3), fromEdge ? "edge swipe went back" : "swipe went back")
             XCTAssertTrue(selected("Menu"))
         }
     }
@@ -149,7 +149,7 @@ final class PagerTests: XCTestCase {
         XCTAssertTrue(app.buttons["Alert me"].waitForExistence(timeout: 3), "the dish row slid open")
         snap("dish-row-open")
         XCTAssertTrue(selected("Menu"))
-        app.navigationBars["FoCo"].tap()
+        app.navigationBars["FOCO"].tap()
         sleep(1)
         // iOS 26 leaves the row open after a tap elsewhere; swiping it back closes it.
         if app.buttons["Alert me"].exists && app.buttons["Alert me"].isHittable { dish.swipeLeft(); sleep(1) }
@@ -183,7 +183,7 @@ final class PagerTests: XCTestCase {
         sleep(1)
         app.swipeUp()
         app.switches.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
-        app.buttons["Join FoCo Social"].tap()
+        app.buttons["Join FOCO Social"].tap()
         // Signing up ends on adding friends (it can wait).
         XCTAssertTrue(app.navigationBars["Add your friends"].waitForExistence(timeout: 8), "signing up ends on adding friends")
         app.navigationBars.buttons.matching(NSPredicate(format: "label IN {'Later', 'Done'}")).firstMatch.tap()

@@ -38,7 +38,7 @@ struct DietForm: View {
                 } header: {
                     Text("Hide food that contains")
                 } footer: {
-                    Text("Dining doesn't label peanuts or tree nuts, so the app can't filter them. Labels can be incomplete. With a serious allergy, confirm at the station or ask the FoCo dietitian.")
+                    Text("Dining doesn't label peanuts or tree nuts, so the app can't filter them. Labels can be incomplete. With a serious allergy, confirm at the station or ask the FOCO dietitian.")
                 }
 
                 Section {

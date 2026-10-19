@@ -36,7 +36,7 @@ struct Checkin: Codable, Identifiable, Hashable {
     var joining: UUID? = nil
     var id: UUID { user.id }
 
-    /// Not there yet: said "I'll be at FoCo in 30 min".
+    /// Not there yet: said "I'll be at FOCO in 30 min".
     var isHeading: Bool { eta != nil }
 }
 

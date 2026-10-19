@@ -10,7 +10,7 @@ struct FoCoApp: App {
     @Environment(\.scenePhase) private var phase
 
     init() {
-        // Created at launch so iOS can wake the app when you arrive at or leave FoCo.
+        // Created at launch so iOS can wake the app when you arrive at or leave FOCO.
         _ = PresenceMonitor.shared
         // Set before launch finishes, so a notification that opens the app still lands on the right tab.
         UNUserNotificationCenter.current().delegate = NotificationRouter.shared

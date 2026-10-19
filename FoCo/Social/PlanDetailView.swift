@@ -116,11 +116,11 @@ struct PlanDetailView: View {
         .sheet(isPresented: $inviting) { InviteFriendsSheet(plan: plan) }
     }
 
-    /// "Dinner at FoCo, Today · 6:30 PM (“window tables”)." You add the rest and pick who it goes to.
+    /// "Dinner at FOCO, Today · 6:30 PM (“window tables”)." You add the rest and pick who it goes to.
     private func message(about plan: Plan) -> String {
-        var text = "\(plan.mealKind?.title ?? "Meal") at FoCo, \(plan.timeLabel)"
+        var text = "\(plan.mealKind?.title ?? "Meal") at FOCO, \(plan.timeLabel)"
         if let note = plan.note, !note.isEmpty { text += " (“\(note)”)" }
-        text += ". Tap Going on FoCo Social if you're in."
+        text += ". Tap Going on FOCO Social if you're in."
         if let link = AppInvite.link { text += "\n\n\(link.absoluteString)" }
         return text
     }

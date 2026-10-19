@@ -28,7 +28,7 @@ final class SocialStore {
     private(set) var isOffline = false
     /// Other people's plans you swiped away; kept on this phone only.
     private(set) var hiddenPlans: Set<UUID> = Set((UserDefaults.standard.stringArray(forKey: "hiddenPlans") ?? []).compactMap(UUID.init))
-    /// Just made a profile: signing up ends on "Add your friends", since seeing friends at FoCo is the point.
+    /// Just made a profile: signing up ends on "Add your friends", since seeing friends at FOCO is the point.
     var showWelcome = false
     /// This phone's push token, once iOS hands it over.
     private var deviceToken: String? = UserDefaults.standard.string(forKey: "deviceToken")
@@ -59,7 +59,7 @@ final class SocialStore {
     var email: String? { client.session?.email }
 
     private static let meKey = "me.v1"
-    /// Who's at FoCo and upcoming plans, saved so the Together tab opens with them even without a connection.
+    /// Who's at FOCO and upcoming plans, saved so the Together tab opens with them even without a connection.
     private static var togetherCache: URL {
         FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("together.v1.json")
     }
@@ -194,7 +194,7 @@ final class SocialStore {
         }
     }
 
-    /// When the app comes back to the foreground. Who's at FoCo always; friends and groups if it's been a few minutes.
+    /// When the app comes back to the foreground. Who's at FOCO always; friends and groups if it's been a few minutes.
     func resume() async {
         switch phase {
         case .loading: await bootstrap()
@@ -428,7 +428,7 @@ final class SocialStore {
         return ok
     }
 
-    /// "I'll be at FoCo around 6:30": friends see it until 20 minutes after you said you'd arrive.
+    /// "I'll be at FOCO around 6:30": friends see it until 20 minutes after you said you'd arrive.
     /// `notify` is "out loud": friends get a notification. `joining` is the friend you tapped I'm coming for.
     func headOver(at eta: Date, spot: String? = nil, share: ShareWith? = nil, notify: Bool = false, joining: UUID? = nil) async {
         guard let id = myId else { return }

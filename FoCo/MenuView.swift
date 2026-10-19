@@ -17,7 +17,7 @@ struct MenuView: View {
 
     private var allItems: [FoodItem]? { store.items(on: date, meal: meal) }
 
-    /// "Maya and 2 friends are planning dinner": who you could eat this meal with.
+    /// "Maya and 2 others are eating dinner": friends going to a plan for this meal. (Who's there now is on Together.)
     private var friendsLine: (people: [Person], text: String)? {
         guard socialStore.phase == .ready else { return nil }
         let me = socialStore.myId
@@ -25,13 +25,9 @@ struct MenuView: View {
         for plan in socialStore.together.plans where plan.mealKind == meal && FoCoCalendar.cal.isDate(plan.startsAt, inSameDayAs: date) {
             for p in plan.going where p.id != me && !people.contains(p) { people.append(p) }
         }
-        let here = FoCoCalendar.cal.isDateInToday(date) && meal == .current
-            ? socialStore.friendsHere.map(\.user).filter { p in !people.contains(p) } : []
-        let all = people + here
-        guard let first = all.first else { return nil }
-        let who = all.count == 1 ? first.firstName : "\(first.firstName) and \(all.count - 1) other\(all.count == 2 ? "" : "s")"
-        let verb = people.isEmpty ? "\(all.count == 1 ? "is" : "are") at FoCo now" : "\(all.count == 1 ? "is" : "are") eating \(meal.title.lowercased())"
-        return (all, "\(who) \(verb)")
+        guard let first = people.first else { return nil }
+        let who = people.count == 1 ? first.firstName : "\(first.firstName) and \(people.count - 1) other\(people.count == 2 ? "" : "s")"
+        return (people, "\(who) \(people.count == 1 ? "is" : "are") eating \(meal.title.lowercased())")
     }
     private var visible: [FoodItem] { (allItems ?? []).filter(prefs.allows) }
     private var saladBar: [FoodItem] { meal.includesSaladBar ? store.saladBar(on: date).filter(prefs.allows) : [] }
@@ -69,7 +65,7 @@ struct MenuView: View {
                     menuList
                 }
             }
-            .navigationTitle("FoCo")
+            .navigationTitle("FOCO")
             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "Search this week — steak, sushi…")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -103,7 +99,7 @@ struct MenuView: View {
                     Button { tab = AppTab.together.rawValue } label: {
                         HStack(spacing: 10) {
                             Image(systemName: "person.2.fill").foregroundStyle(.tint)
-                            Text("See which friends are at FoCo").font(.subheadline).foregroundStyle(Color.primary)
+                            Text("See which friends are at FOCO").font(.subheadline).foregroundStyle(Color.primary)
                             Spacer()
                             Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
                         }

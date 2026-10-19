@@ -52,7 +52,7 @@ enum APIError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .server(let message, _): message
-        case .offline: "Can't reach FoCo Social. Check your connection and try again."
+        case .offline: "Can't reach FOCO Social. Check your connection and try again."
         case .notSignedIn: "Please sign in again."
         }
     }

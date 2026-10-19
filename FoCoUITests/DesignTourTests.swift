@@ -57,7 +57,7 @@ final class DesignTourTests: XCTestCase {
         }
 
         app.swipeDown(); app.swipeDown(); sleep(1)
-        app.navigationBars["FoCo"].buttons["Food alerts"].tap(); sleep(2); snap("food-alerts")
+        app.navigationBars["FOCO"].buttons["Food alerts"].tap(); sleep(2); snap("food-alerts")
         app.navigationBars.buttons.element(boundBy: 0).tap(); sleep(1)
         tab("Me"); sleep(1); snap("me")
     }
@@ -65,7 +65,7 @@ final class DesignTourTests: XCTestCase {
     private func signUp() {
         app.launchArguments = ["-resetForUITests", "-onboarded", "<true/>", "-useLocalServer", "YES", "-meal", "dinner"]
         app.launch()
-        XCTAssertTrue(app.navigationBars["FoCo"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["FOCO"].waitForExistence(timeout: 5))
         sleep(2)
         snap("signed-out-menu")
         tab("Together")
@@ -87,7 +87,7 @@ final class DesignTourTests: XCTestCase {
         sleep(1)
         app.swipeUp()
         app.switches.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
-        app.buttons["Join FoCo Social"].tap()
+        app.buttons["Join FOCO Social"].tap()
         // Signing up ends on adding friends (it can wait).
         XCTAssertTrue(app.navigationBars["Add your friends"].waitForExistence(timeout: 8), "signing up ends on adding friends")
         sleep(1)
