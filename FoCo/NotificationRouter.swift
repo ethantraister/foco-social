@@ -1,15 +1,14 @@
 import Foundation
 import UserNotifications
 
-/// Tapping a notification opens what it's about; food alerts and friends' notifications show as banners while the app is open,
-/// except a message for the chat you're already looking at.
+/// Tapping a notification opens what it's about; food alerts and friends' notifications show as banners while the app is open.
 final class NotificationRouter: NSObject, UNUserNotificationCenterDelegate {
     static let shared = NotificationRouter()
 
     /// Local notifications, by identifier.
     static func tab(for identifier: String) -> AppTab? {
         if identifier == "autoCheckin" { return .together }
-        if identifier.hasPrefix("watch|") { return .alerts }
+        if identifier.hasPrefix("watch|") { return .menu }
         return nil
     }
 
@@ -43,13 +42,10 @@ final class NotificationRouter: NSObject, UNUserNotificationCenterDelegate {
     }
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
-        let route = notification.request.content.userInfo["route"] as? [String: Any]
-        guard let route else { return [.banner, .list, .sound] }   // food alerts, check-in notices
-        return await MainActor.run {
-            let social = SocialStore.shared
-            Task { await social.refreshChats(); await social.refreshTogether() }
-            if let key = route["chat"] as? String, social.openChat?.key == key { return [] }
-            return [.banner, .list, .sound]
+        if notification.request.content.userInfo["route"] != nil {
+            // A friend's news: Together catches up while the banner shows.
+            Task { @MainActor in await SocialStore.shared.refreshTogether() }
         }
+        return [.banner, .list, .sound]
     }
 }

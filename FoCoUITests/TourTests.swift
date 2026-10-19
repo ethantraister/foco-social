@@ -55,9 +55,8 @@ final class TourTests: XCTestCase {
         app.buttons["Start eating"].tap()
         allowNotificationsIfAsked()
 
-        XCTAssertTrue(app.textFields["NetID"].waitForExistence(timeout: 5), "the app opens on Together")
-        tab("Menu")
-        XCTAssertTrue(app.navigationBars["FoCo"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["FoCo"].waitForExistence(timeout: 5), "signed out, the app opens on the menu")
+        XCTAssertTrue(app.buttons["tab.Menu"].isSelected)
         sleep(4)
         snap("menu-dinner")
 
@@ -85,16 +84,17 @@ final class TourTests: XCTestCase {
             snap("menu-saladbar")
         }
 
-        tab("Alerts")
-        sleep(3)
+        // Food alerts live behind the bell on the menu: the dish just followed is there.
+        app.swipeDown(); app.swipeDown()
+        app.navigationBars["FoCo"].buttons["Food alerts"].tap()
+        XCTAssertTrue(app.navigationBars["Food alerts"].waitForExistence(timeout: 3), "the bell opens food alerts")
+        XCTAssertTrue(app.buttons["Steak, following"].exists, "foods picked during onboarding are followed")
+        sleep(2)
         snap("alerts")
-
-        tab("Me")
-        app.buttons["Food requests"].tap()
-        sleep(1)
-        snap("requests")
         app.navigationBars.buttons.element(boundBy: 0).tap()
 
+        tab("Me")
+        XCTAssertFalse(app.buttons["Food requests"].exists, "no food requests until Dining takes them")
         app.buttons["My diet"].tap()
         sleep(1)
         snap("diet")
@@ -112,7 +112,7 @@ final class TourTests: XCTestCase {
         }
     }
 
-    /// The app's own bottom bar; it opens on Together, so menu tests start by tapping Menu.
+    /// The app's own bottom bar.
     private func tab(_ name: String) {
         let item = app.buttons["tab.\(name)"]
         XCTAssertTrue(item.waitForExistence(timeout: 5), "\(name) tab")
@@ -145,7 +145,7 @@ final class TourTests: XCTestCase {
         tab("Menu")
         XCTAssertTrue(app.navigationBars["FoCo"].waitForExistence(timeout: 5))
         sleep(4)
-        for tab in ["Menu", "Alerts", "Me"] {
+        for tab in ["Menu", "Me"] {
             self.tab(tab)
             sleep(2)
             try app.performAccessibilityAudit(for: [.contrast, .elementDetection, .hitRegion, .sufficientElementDescription, .textClipped, .trait]) { issue in

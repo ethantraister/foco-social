@@ -48,13 +48,6 @@ final class DesignTourTests: XCTestCase {
             app.navigationBars.buttons.element(boundBy: 0).tap(); sleep(1)
         }
 
-        tab("Chats"); sleep(2); snap("chats")
-        let maya = app.staticTexts["Maya R."].firstMatch
-        if maya.waitForExistence(timeout: 3) {
-            maya.tap(); sleep(2); snap("dm")
-            app.navigationBars.buttons.element(boundBy: 0).tap(); sleep(1)
-        }
-
         tab("Menu"); sleep(3); snap("menu")
         app.swipeUp(); sleep(1); snap("menu-scrolled")
         let dish = app.buttons.matching(NSPredicate(format: "label CONTAINS 'calories'")).element(boundBy: 3)
@@ -63,13 +56,18 @@ final class DesignTourTests: XCTestCase {
             app.navigationBars.buttons.element(boundBy: 0).tap(); sleep(1)
         }
 
-        tab("Alerts"); sleep(1); snap("alerts")
+        app.swipeDown(); app.swipeDown(); sleep(1)
+        app.navigationBars["FoCo"].buttons["Food alerts"].tap(); sleep(2); snap("food-alerts")
+        app.navigationBars.buttons.element(boundBy: 0).tap(); sleep(1)
         tab("Me"); sleep(1); snap("me")
     }
 
     private func signUp() {
         app.launchArguments = ["-resetForUITests", "-onboarded", "<true/>", "-useLocalServer", "YES", "-meal", "dinner"]
         app.launch()
+        XCTAssertTrue(app.navigationBars["FoCo"].waitForExistence(timeout: 5))
+        sleep(2)
+        snap("signed-out-menu")
         tab("Together")
         let email = app.textFields["NetID"]
         XCTAssertTrue(email.waitForExistence(timeout: 5))
@@ -90,6 +88,11 @@ final class DesignTourTests: XCTestCase {
         app.swipeUp()
         app.switches.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
         app.buttons["Join FoCo Social"].tap()
+        // Signing up ends on adding friends (it can wait).
+        XCTAssertTrue(app.navigationBars["Add your friends"].waitForExistence(timeout: 8), "signing up ends on adding friends")
+        sleep(1)
+        snap("add-friends")
+        app.navigationBars.buttons.matching(NSPredicate(format: "label IN {'Later', 'Done'}")).firstMatch.tap()
         XCTAssertTrue(app.navigationBars["Together"].waitForExistence(timeout: 8))
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         for label in ["Allow", "Allow While Using App"] where springboard.buttons[label].waitForExistence(timeout: 2) {

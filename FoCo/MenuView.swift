@@ -5,6 +5,7 @@ struct MenuView: View {
     @Environment(Preferences.self) private var prefs
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.tabIsActive) private var active
     @AppStorage("tab") private var tab = AppTab.together.rawValue
     @State private var leftAt: Date?
     @State private var date = FoCoCalendar.startOfDay(.now)
@@ -70,8 +71,18 @@ struct MenuView: View {
             }
             .navigationTitle("FoCo")
             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "Search this week — steak, sushi…")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink { FoodAlertsView() } label: {
+                        Image(systemName: prefs.watches.isEmpty ? "bell" : "bell.badge")
+                    }
+                    .accessibilityLabel("Food alerts")
+                    .accessibilityValue(prefs.watches.isEmpty ? "" : "Following \(prefs.watches.count)")
+                }
+            }
             .navigationDestination(for: FoodRoute.self) { FoodDetailView(route: $0) }
             .tabRoot()
+            .task(id: active) { if active { socialStore.noteUse(.menu) } }
         }
     }
 
@@ -87,7 +98,19 @@ struct MenuView: View {
             .listRowSeparator(.hidden)
             .listRowBackground(Color.clear)
 
-            if let social = friendsLine {
+            if socialStore.phase == .signedOut {
+                Section {
+                    Button { tab = AppTab.together.rawValue } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: "person.2.fill").foregroundStyle(.tint)
+                            Text("See which friends are at FoCo").font(.subheadline).foregroundStyle(Color.primary)
+                            Spacer()
+                            Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
+                        }
+                    }
+                    .accessibilityHint("Opens Together, where you sign in with your NetID")
+                }
+            } else if let social = friendsLine {
                 Section {
                     Button { tab = AppTab.together.rawValue } label: {
                         HStack(spacing: 10) {

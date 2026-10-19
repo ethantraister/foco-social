@@ -221,9 +221,6 @@ final class SupabaseClient {
     private static func message(from data: Data, status: Int) -> String {
         let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
         let raw = (obj?["message"] ?? obj?["msg"] ?? obj?["error_description"]) as? String ?? "Something went wrong (\(status))."
-        if raw.contains("food_requests_once_a_day") { return "You already asked for that today." }
-        if raw.contains("row-level security") && raw.contains("food_requests") { return "That's 10 requests today, the daily limit. Try again tomorrow." }
-        if raw.contains("row-level security") && raw.contains("\"messages\"") { return "Couldn't send that. You may have left the chat, or you're sending too fast." }
         if raw.contains("Invalid login credentials") { return "That password didn't work." }
         if raw.contains("you can only request this after") || raw.contains("over_email_send_rate_limit") { return "A code was just sent. Wait a minute before asking for another." }
         if raw.contains("row-level security") { return "You don't have permission to do that." }

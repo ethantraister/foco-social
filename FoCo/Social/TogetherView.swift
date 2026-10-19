@@ -121,7 +121,7 @@ struct TogetherView: View {
                 } header: {
                     SectionTitle("Coming up")
                 } footer: {
-                    Text("Tap a plan to see who's coming and to chat. Swipe left to remove one.")
+                    Text("Tap a plan to see who's coming. Swipe left to remove one.")
                 }
 
                 Section {
@@ -164,7 +164,9 @@ struct TogetherView: View {
             .refreshable { await social.refreshAll() }
             .task(id: active) {
                 guard active else { return }
-                await Push.registerIfAllowed(ask: true)
+                social.noteUse(.together)
+                // Asked when it means something (adding friends, posting going soon or a plan), not on arrival.
+                await Push.registerIfAllowed(ask: false)
                 // Who's here refreshes every 30 s. During a meal, automatic check-in also takes a location reading then,
                 // since iOS can take minutes to report walking in while the app is open.
                 while !Task.isCancelled {
@@ -336,7 +338,9 @@ private struct MyCheckinRow: View {
 }
 
 /// The same switch as in Me, so it's where you'd look for it.
-private struct AutoCheckinSetting: View {
+/// The automatic check-in switch, with a way to fix location access when it can't work. On Together, in Me, and on
+/// the last step of signing up.
+struct AutoCheckinSetting: View {
     @Bindable private var presence = PresenceMonitor.shared
     @Environment(\.openURL) private var openURL
 
@@ -387,7 +391,7 @@ private struct FriendHereRow: View {
             }
             Spacer()
             if social.myCheckin == nil && social.myHeading == nil {
-                Button("On my way") {
+                Button("I'm coming") {
                     Task { await social.headOver(at: .now.addingTimeInterval(10 * 60), spot: checkin.spot, joining: checkin.user.id) }
                 }
                 .glassButton(prominent: true)
@@ -451,7 +455,7 @@ private struct FriendHeadingRow: View {
             }
             Spacer()
             if social.myCheckin == nil && social.myHeading == nil, let eta = checkin.eta {
-                Button("Me too") {
+                Button("I'm coming") {
                     Task { await social.headOver(at: max(eta, .now.addingTimeInterval(60)), spot: checkin.spot, joining: checkin.user.id) }
                 }
                 .glassButton(prominent: true)
@@ -466,7 +470,7 @@ struct PlanCard: View {
     @Environment(SocialStore.self) private var social
     let plan: Plan
     let prominent: Bool
-    /// Opens the plan's page: who's coming, the chat, and (for the host) editing.
+    /// Opens the plan's page: who's coming and (for the host) editing.
     let open: () -> Void
 
     private var isHost: Bool { plan.host.id == social.myId }
@@ -496,7 +500,7 @@ struct PlanCard: View {
                 .contentShape(.rect)
             }
             .buttonStyle(.plain)
-            .accessibilityHint("Shows who's coming and the plan's chat")
+            .accessibilityHint("Shows who's coming")
 
             if let note = plan.note, !note.isEmpty {
                 Text("“\(note)”").font(.subheadline)

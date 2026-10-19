@@ -14,7 +14,7 @@ final class StressTests: XCTestCase {
 
     func testFastSwipesAndTaps() {
         signUp()
-        let tabs = ["Menu", "Chats", "Together", "Alerts", "Me"]
+        let tabs = ["Menu", "Together", "Me"]
 
         // Quick flicks both ways, with no pause between them.
         for round in 0..<12 {
@@ -33,12 +33,12 @@ final class StressTests: XCTestCase {
         // A tap on the bar the moment a swipe lets go, while the pages are still sliding.
         for i in 0..<10 {
             flick(left: i.isMultiple(of: 2), y: 0.5)
-            app.buttons["tab.\(tabs[(i * 3) % 5])"].tap()
+            app.buttons["tab.\(tabs[(i * 2) % tabs.count])"].tap()
         }
         alive("after taps mid-swipe")
 
         // Scroll a list and swipe sideways while it's still moving.
-        for name in ["Together", "Menu", "Chats"] {
+        for name in ["Together", "Menu", "Me"] {
             app.buttons["tab.\(name)"].tap()
             app.swipeUp(velocity: .fast)
             flick(left: true, y: 0.5)
@@ -60,18 +60,19 @@ final class StressTests: XCTestCase {
         }
         alive("after push, edge-swipe back, swipe")
 
-        // The same in chats, whose screens hide the bar.
-        app.buttons["tab.Chats"].tap()
+        // The same with a plan's page on Together.
+        app.buttons["tab.Together"].tap()
         for _ in 0..<3 {
-            let chat = app.cells.firstMatch
-            guard chat.waitForExistence(timeout: 5) else { break }
-            chat.tap()
+            let plan = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Lunch with' OR label BEGINSWITH 'Dinner with'")).firstMatch
+            guard plan.waitForExistence(timeout: 5), plan.isHittable else { break }
+            plan.tap()
             sleep(1)
             swipeBack()
             flick(left: true, y: 0.5)
             flick(left: false, y: 0.5)
+            app.buttons["tab.Together"].tap()
         }
-        alive("after chats")
+        alive("after plans")
 
         // Every tab in turn, quickly, a few times over.
         for _ in 0..<3 { for name in tabs.shuffled() { app.buttons["tab.\(name)"].tap() } }
@@ -114,6 +115,7 @@ final class StressTests: XCTestCase {
     }
 
     private func signUp() {
+        app.buttons["tab.Together"].tap()   // signed out, the app opens on the menu
         let email = app.textFields["NetID"]
         XCTAssertTrue(email.waitForExistence(timeout: 5))
         email.tap()
@@ -132,6 +134,9 @@ final class StressTests: XCTestCase {
         app.swipeUp()
         app.switches.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
         app.buttons["Join FoCo Social"].tap()
+        // Signing up ends on adding friends (it can wait).
+        XCTAssertTrue(app.navigationBars["Add your friends"].waitForExistence(timeout: 8), "signing up ends on adding friends")
+        app.navigationBars.buttons.matching(NSPredicate(format: "label IN {'Later', 'Done'}")).firstMatch.tap()
         XCTAssertTrue(app.navigationBars["Together"].waitForExistence(timeout: 8))
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         for label in ["Allow", "Allow While Using App"] where springboard.buttons[label].waitForExistence(timeout: 2) {

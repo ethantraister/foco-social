@@ -5,26 +5,19 @@ import UserNotifications
 
 /// The tabs, in the order they sit along the bottom.
 enum AppTab: Int, CaseIterable {
-    case menu = 0, chats, together, alerts, me
+    case menu = 0, together, me
 }
 
 /// Where a tapped notification should land, for the screens to pick up.
 @MainActor @Observable
 final class AppRouter {
     static let shared = AppRouter()
-    var pendingChat: ChatTarget?
     var pendingPlan: UUID?
 
+    /// Friends' notifications all land on Together; a plan's open that plan.
     func open(_ route: [String: Any]) {
-        if let key = route["chat"] as? String, let chat = ChatTarget(key: key) {
-            UserDefaults.standard.set(AppTab.chats.rawValue, forKey: "tab")
-            pendingChat = chat
-        } else if let raw = route["plan"] as? String, let plan = UUID(uuidString: raw) {
-            UserDefaults.standard.set(AppTab.together.rawValue, forKey: "tab")
-            pendingPlan = plan
-        } else if route["tab"] as? String == "together" {
-            UserDefaults.standard.set(AppTab.together.rawValue, forKey: "tab")
-        }
+        UserDefaults.standard.set(AppTab.together.rawValue, forKey: "tab")
+        if let raw = route["plan"] as? String, let plan = UUID(uuidString: raw) { pendingPlan = plan }
     }
 }
 

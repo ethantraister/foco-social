@@ -141,7 +141,8 @@ final class Preferences {
     private init() {
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("-resetForUITests") {
-            for key in [Self.defaultsKey, "onboarded", "tab", "hiddenPlans", "goingLoud", "shareWith", "maybeReminders", "deviceToken"] {
+            // Not "tab": the app picks the tab at every launch (FoCoApp.init), before this store is first used.
+            for key in [Self.defaultsKey, "onboarded", "hiddenPlans", "goingLoud", "shareWith", "maybeReminders", "deviceToken"] {
                 UserDefaults.standard.removeObject(forKey: key)
             }
         }
@@ -177,7 +178,7 @@ final class Preferences {
         return parts.joined(separator: " · ")
     }
 
-    /// Everything that should trigger an alert. Requesting a food follows it too, and it can be unfollowed like any other.
+    /// Everything that should trigger an alert.
     var alertKeywords: [String] {
         var seen = Set<String>()
         return watches.filter { seen.insert($0.lowercased()).inserted }
@@ -185,6 +186,7 @@ final class Preferences {
 
     func follow(_ name: String) {
         if !isWatching(name) { watches.append(name) }
+        SocialStore.shared.noteUse(.alert)
     }
 
     func unfollow(_ name: String) {
@@ -207,6 +209,7 @@ final class Preferences {
             watches.remove(at: i)
         } else {
             watches.append(name)
+            SocialStore.shared.noteUse(.alert)
         }
     }
 }

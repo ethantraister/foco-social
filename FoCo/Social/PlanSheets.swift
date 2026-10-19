@@ -1,4 +1,5 @@
 import SwiftUI
+import UserNotifications
 
 /// Plan a meal, or (with `editing`) change one you're hosting. The meal follows from the time you pick,
 /// and times when FoCo is closed are turned away with a popup.
@@ -86,7 +87,7 @@ struct PlanComposer: View {
                         } header: {
                             Text("Pick friends")
                         } footer: {
-                            Text("Friends you've eaten with or messaged lately are at the top.")
+                            Text("Friends you've eaten with lately are at the top.")
                         }
                     } else if audience == .group {
                         Section("Pick a group") {
@@ -149,6 +150,8 @@ struct PlanComposer: View {
                             }
                             working = false
                             if ok { dismiss() }
+                            // Now's when hearing back matters: ask for notifications (once; iOS remembers the answer).
+                            if ok && editing == nil { await Push.registerIfAllowed(ask: true) }
                         }
                     } label: {
                         if working { ProgressView() } else { Text(editing == nil ? "Post" : "Save").bold() }
@@ -310,7 +313,7 @@ struct HeadingSheet: View {
                     Text("I'll be at FoCo in")
                 } footer: {
                     Text(FoCoHours.isOpen(at: eta)
-                         ? "Around \(eta.formatted(date: .omitted, time: .shortened)). Friends can tap Me too."
+                         ? "Around \(eta.formatted(date: .omitted, time: .shortened)). Friends can tap I'm coming."
                          : "FoCo is closed at \(eta.formatted(date: .omitted, time: .shortened)).")
                 }
 
@@ -357,7 +360,11 @@ struct HeadingSheet: View {
                         let when = eta
                         guard FoCoHours.isOpen(at: when) else { closedAlert = when; return }
                         guard when < Date.now.addingTimeInterval(150 * 60) else { tooLate = true; return }
-                        Task { await social.headOver(at: when, spot: spot, share: share, notify: loud) }
+                        Task {
+                            await social.headOver(at: when, spot: spot, share: share, notify: loud)
+                            // So you hear when someone's coming too (asks once; iOS remembers the answer).
+                            await Push.registerIfAllowed(ask: true)
+                        }
                         dismiss()
                     }
                     .bold()
@@ -378,6 +385,9 @@ struct FriendsView: View {
     @Environment(SocialStore.self) private var social
     @Environment(\.dismiss) private var dismiss
     var embedded = false
+    /// Right after joining (the last step of signing up): the same screen, with groups left for later.
+    var welcome = false
+    @State private var notifications: UNAuthorizationStatus = .authorized
     @State private var query = ""
     @State private var results: [Person] = []
     @State private var searching = false
@@ -414,6 +424,34 @@ struct FriendsView: View {
                     }
                 }
             } else {
+                if welcome {
+                    Section {
+                        Text("Add the people you eat with. You'll see when they're at FoCo, and they'll see you.")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .listRowBackground(Color.clear)
+                    }
+                    // The two switches that make Together work without effort: hearing from friends, and showing up
+                    // when you walk in. Both stay off unless you choose them.
+                    Section {
+                        if notifications == .notDetermined {
+                            Button {
+                                Task {
+                                    await Push.registerIfAllowed(ask: true)
+                                    notifications = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+                                }
+                            } label: {
+                                Label("Know when friends head to FoCo", systemImage: "bell.badge").labelStyle(.tile(.red))
+                            }
+                        }
+                        AutoCheckinSetting()
+                    } footer: {
+                        Text(notifications == .notDetermined
+                             ? "Notifications are only what friends do: going soon, joining you, invites. Automatic check-in shows friends you're at FoCo when you walk in during a meal, nothing else. Change either in Me."
+                             : "Shows friends you're at FoCo when you walk in during a meal, nothing else. Change it anytime in Me.")
+                    }
+                }
+
                 if !social.incoming.isEmpty {
                     Section("Friend requests") {
                         ForEach(social.incoming) { FriendRequestRow(person: $0) }
@@ -433,25 +471,27 @@ struct FriendsView: View {
                     Text("Opens Messages with an invite to FoCo Social. Pick who to send it to.")
                 }
 
-                Section {
-                    ForEach(social.joinedGroups) { group in
-                        NavigationLink {
-                            GroupDetailView(groupId: group.id)
-                        } label: {
-                            HStack(spacing: 12) {
-                                Avatar(groupId: group.id, name: group.name, photoPath: group.photoPath, size: 40)
-                                VStack(alignment: .leading) {
-                                    Text(group.name).font(.headline)
-                                    Text("\(group.people.count) members").font(.caption).foregroundStyle(.secondary)
+                if !welcome {
+                    Section {
+                        ForEach(social.joinedGroups) { group in
+                            NavigationLink {
+                                GroupDetailView(groupId: group.id)
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Avatar(groupId: group.id, name: group.name, photoPath: group.photoPath, size: 40)
+                                    VStack(alignment: .leading) {
+                                        Text(group.name).font(.headline)
+                                        Text("\(group.people.count) members").font(.caption).foregroundStyle(.secondary)
+                                    }
                                 }
                             }
                         }
+                        Button { showNewGroup = true } label: { Label("New group", systemImage: "plus.circle") }
+                    } header: {
+                        Text("Groups and teams")
+                    } footer: {
+                        Text("Plans posted to a group reach everyone in it, like a team dinner after practice.")
                     }
-                    Button { showNewGroup = true } label: { Label("New group", systemImage: "plus.circle") }
-                } header: {
-                    Text("Groups and teams")
-                } footer: {
-                    Text("Each group has its own chat, and plans posted to a group reach everyone in it.")
                 }
 
                 Section {
@@ -464,19 +504,12 @@ struct FriendsView: View {
                                 Button("Remove", role: .destructive) { Task { await social.removeFriend(person) } }
                                 Button("Block") { blocking = person }.tint(.gray)
                             }
-                            .swipeActions(edge: .leading) {
-                                NavigationLink { ChatView(target: .dm(person.id)) } label: { Label("Message", systemImage: "message") }
-                                    .tint(.dartmouthGreen)
-                            }
-                            .contextMenu {
-                                NavigationLink { ChatView(target: .dm(person.id)) } label: { Label("Message \(person.firstName)", systemImage: "message") }
-                            }
                     }
                 } header: {
                     Text("Friends (\(social.friends.count))")
                 } footer: {
                     if !social.friends.isEmpty {
-                        Text("★ Close friends: you can share going soon with just them, and choose to only hear about them (Me → Notifications). Swipe right on a friend to message them.")
+                        Text("★ Close friends: you can share going soon with just them, and choose to only hear about them (Me → Notifications).")
                     }
                 }
 
@@ -492,7 +525,7 @@ struct FriendsView: View {
             }
         }
         .onBackdrop()
-        .navigationTitle("Friends")
+        .navigationTitle(welcome ? "Add your friends" : "Friends")
         .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "Find people by name")
         .textInputAutocapitalization(.never)
         .task(id: query) {
@@ -505,13 +538,11 @@ struct FriendsView: View {
             searching = false
         }
         .refreshable { await social.refreshAll() }
-        .sheet(isPresented: $showNewGroup) { NewGroupSheet() }
-        .confirmationDialog("Block \(blocking?.firstName ?? "")?", isPresented: Binding(get: { blocking != nil }, set: { if !$0 { blocking = nil } }),
-                            titleVisibility: .visible, presenting: blocking) { person in
-            Button("Block", role: .destructive) { Task { await social.block(person) } }
-        } message: { _ in
-            Text("You won't see each other's plans, check-ins, or messages, and they'll be removed from your friends. You can unblock them from Me → About.")
+        .task {
+            if welcome { notifications = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus }
         }
+        .sheet(isPresented: $showNewGroup) { NewGroupSheet() }
+        .blockAlert(blocking, isPresented: Binding(get: { blocking != nil }, set: { if !$0 { blocking = nil } }))
     }
 
     @ViewBuilder private func relationButton(_ person: Person) -> some View {
@@ -589,6 +620,52 @@ struct PersonRow<Trailing: View>: View {
             Spacer(minLength: 8)
             trailing().fixedSize()
         }
+        .modifier(ReportOrBlock(person: person))
+    }
+}
+
+/// Press and hold anyone else to report or block them. (The App Store asks apps with profiles for both.)
+private struct ReportOrBlock: ViewModifier {
+    @Environment(SocialStore.self) private var social
+    @Environment(\.openURL) private var openURL
+    let person: Person
+    @State private var blocking = false
+
+    func body(content: Content) -> some View {
+        if person.id == social.myId || social.blocked.contains(where: { $0.id == person.id }) {
+            content
+        } else {
+            content
+                .contextMenu {
+                    if let report = AppInfo.reportEmail(about: person) {
+                        Button { openURL(report) } label: { Label("Report \(person.firstName)", systemImage: "flag") }
+                    }
+                    Button(role: .destructive) { blocking = true } label: { Label("Block \(person.firstName)", systemImage: "hand.raised") }
+                }
+                .blockAlert(person, isPresented: $blocking)
+        }
+    }
+}
+
+extension View {
+    /// "Block Maya?" in the middle of the screen, like the other confirmations.
+    func blockAlert(_ person: Person?, isPresented: Binding<Bool>) -> some View {
+        modifier(BlockAlert(person: person, isPresented: isPresented))
+    }
+}
+
+private struct BlockAlert: ViewModifier {
+    @Environment(SocialStore.self) private var social
+    let person: Person?
+    @Binding var isPresented: Bool
+
+    func body(content: Content) -> some View {
+        content.alert("Block \(person?.firstName ?? "")?", isPresented: $isPresented) {
+            Button("Cancel", role: .cancel) {}
+            Button("Block", role: .destructive) { if let person { Task { await social.block(person) } } }
+        } message: {
+            Text("You won't see each other's plans or check-ins, and they'll be removed from your friends. You can unblock them from Me → About.")
+        }
     }
 }
 
@@ -622,7 +699,7 @@ struct MemberSearchPicker: View {
         } header: {
             Text("Add people")
         } footer: {
-            Text("Anyone on FoCo Social, not just friends. They join once they accept. Group members see the group's plans and chat, but only your friends see when you're at FoCo.")
+            Text("Anyone on FoCo Social, not just friends. They join once they accept. Group members see the group's plans, but only your friends see when you're at FoCo.")
         }
         .task(id: query) {
             let q = query.trimmingCharacters(in: .whitespaces)
@@ -748,14 +825,7 @@ struct GroupDetailView: View {
                     Section {
                         GroupInviteRow(group: group)
                     } footer: {
-                        Text("Join to see the group's meal plans and chat.")
-                    }
-                } else {
-                    Section {
-                        NavigationLink { ChatView(target: .group(group.id)) } label: {
-                            Label("Group chat", systemImage: "bubble.left.and.bubble.right")
-                                .badge(social.chats.first { $0.target == .group(group.id) }?.unread ?? 0)
-                        }
+                        Text("Join to see the group's meal plans.")
                     }
                 }
                 Section("\(group.people.count) members") {
@@ -826,7 +896,7 @@ struct GroupDetailView: View {
         .confirmationDialog("Remove \(removing?.firstName ?? "")?", isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }), titleVisibility: .visible, presenting: removing) { person in
             Button("Remove", role: .destructive) { if let group { Task { await social.remove(person.id, from: group) } } }
         } message: { _ in
-            Text("They'll stop seeing the group's plans and chat. Anyone in the group can invite them back.")
+            Text("They'll stop seeing the group's plans. Anyone in the group can invite them back.")
         }
         .confirmationDialog("Make \(newOwner?.firstName ?? "") the owner?", isPresented: Binding(get: { newOwner != nil }, set: { if !$0 { newOwner = nil } }), titleVisibility: .visible, presenting: newOwner) { person in
             Button("Make owner") { if let group { Task { await social.transfer(group, to: person.id) } } }
@@ -838,14 +908,14 @@ struct GroupDetailView: View {
                 if let group { Task { await social.leave(group) }; dismiss() }
             }
         } message: {
-            Text("You'll stop seeing its meal plans and chat. Someone in the group can invite you back.")
+            Text("You'll stop seeing its meal plans. Someone in the group can invite you back.")
         }
         .confirmationDialog("Delete \(group?.name ?? "this group")?", isPresented: $confirmDelete, titleVisibility: .visible) {
             Button("Delete group", role: .destructive) {
                 if let group { Task { await social.delete(group) }; dismiss() }
             }
         } message: {
-            Text("This removes the group, its meal plans, and its chat for everyone.")
+            Text("This removes the group and its meal plans for everyone.")
         }
         .onBackdrop()
         .navigationTitle(group?.name ?? "Group")

@@ -1,7 +1,7 @@
 import SwiftUI
 
 // Liquid Glass (iOS 26 and later) for the app's floating controls: the bottom bar, Together's two big buttons,
-// answer buttons, chips, the chat composer, and notes. Earlier iOS versions get frosted material instead.
+// answer buttons, chips, and notes. Earlier iOS versions get frosted material instead.
 // Content itself (lists, cards, messages) stays solid, as Apple's guidelines ask: glass is for controls.
 
 extension View {

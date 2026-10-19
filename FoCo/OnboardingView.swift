@@ -101,7 +101,7 @@ struct OnboardingView: View {
                     Chip(title: food, selected: prefs.isWatching(food)) { prefs.toggleWatch(food) }
                 }
             }
-            Text("You can follow any food later, from search or by swiping right on a dish.")
+            Text("You can follow any food later: tap the bell on the menu, or swipe right on a dish.")
                 .font(.footnote).foregroundStyle(.secondary)
         }
     }

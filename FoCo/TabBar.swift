@@ -1,7 +1,7 @@
 import Observation
 import SwiftUI
 
-/// Whether the bottom bar shows: it steps aside for the keyboard and for full-screen chats. Also tracks which tabs
+/// Whether the bottom bar shows: it steps aside for the keyboard. Also tracks which tabs
 /// have a screen pushed on top, since swiping sideways there should go back, not to the next tab.
 @MainActor @Observable
 final class TabBarState {
@@ -9,11 +9,7 @@ final class TabBarState {
     static let height: CGFloat = 62
 
     var keyboardUp = false
-    private var hiders = 0
-    var visible: Bool { !keyboardUp && hiders == 0 }
-
-    func hide() { hiders += 1 }
-    func show() { hiders = max(0, hiders - 1) }
+    var visible: Bool { !keyboardUp }
 
     /// While the pages are being swiped: where they are (0 = Menu … 4 = Me, in between mid-swipe). Only the bar
     /// reads it, so swiping redraws the bar and not the pages.
@@ -26,26 +22,25 @@ final class TabBarState {
     func rootDisappeared(_ tab: Int) { roots[tab, default: 1] -= 1 }
 }
 
-/// The bottom bar: one floating Liquid Glass capsule with all five tabs. Together sits in the middle as a
+/// The bottom bar: one floating Liquid Glass capsule with the three tabs. Together sits in the middle as a
 /// Dartmouth Green button (like Venmo's Pay/Request). The soft highlight behind the selected tab follows your
 /// finger while you swipe between pages.
 struct FoCoTabBar: View {
     @Binding var selection: Int
-    let chatsBadge: Int
     let togetherBadge: Int
     @State private var bar = TabBarState.shared
 
     var body: some View {
         HStack(spacing: 0) {
             item(.menu, "Menu", "fork.knife", "fork.knife")
-            item(.chats, "Chats", "bubble.left.and.bubble.right", "bubble.left.and.bubble.right.fill", badge: chatsBadge)
             together
-            item(.alerts, "Alerts", "bell", "bell.fill")
             item(.me, "Me", "person.crop.circle", "person.crop.circle.fill")
         }
         .background { highlight }
         .padding(.horizontal, 6)
         .frame(height: TabBarState.height)
+        // Three tabs hug the middle, like the system's bar, instead of stretching edge to edge.
+        .frame(maxWidth: 300)
         .glass(in: Capsule())
         .padding(.horizontal, 14)
         .dynamicTypeSize(...DynamicTypeSize.xxLarge)
@@ -58,7 +53,7 @@ struct FoCoTabBar: View {
     /// button stands out on its own.
     private var highlight: some View {
         GeometryReader { geo in
-            let slot = geo.size.width / 5
+            let slot = geo.size.width / CGFloat(AppTab.allCases.count)
             let at = bar.swipe ?? CGFloat(selection)
             Capsule()
                 .fill(Color.primary.opacity(0.07))
@@ -141,7 +136,7 @@ private struct Badge: View {
 }
 
 extension EnvironmentValues {
-    /// Whether this tab's page is the one on screen. All five pages stay loaded so you can swipe between them,
+    /// Whether this tab's page is the one on screen. All the pages stay loaded so you can swipe between them,
     /// so anything that refreshes on a timer should only run while this is true.
     @Entry var tabIsActive = true
     /// Which tab's page a view is on.
@@ -198,10 +193,4 @@ extension View {
 
     /// Marks a tab's first screen (inside its navigation stack), so swiping sideways only changes tabs from there.
     func tabRoot() -> some View { modifier(TabRoot()) }
-
-    /// For screens that take the whole height, like a chat: the bottom bar steps aside while they're up.
-    func hidesTabBar() -> some View {
-        onAppear { TabBarState.shared.hide() }
-            .onDisappear { TabBarState.shared.show() }
-    }
 }

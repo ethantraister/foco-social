@@ -2,13 +2,7 @@ import SwiftUI
 
 struct FoodDetailView: View {
     @Environment(Preferences.self) private var prefs
-    @Environment(SocialStore.self) private var social
     let route: FoodRoute
-    @State private var requested = false
-    @State private var requesting = false
-    @State private var signingIn = false
-    /// Tapped "Ask Dining" while signed out: sends as soon as sign-in finishes.
-    @State private var requestAfterSignIn = false
 
     private var item: FoodItem { route.item }
 
@@ -41,23 +35,8 @@ struct FoodDetailView: View {
                     Label("Alert me when it's served", systemImage: "bell")
                 }
                 .sensoryFeedback(.success, trigger: prefs.isWatching(item.name))
-                Button {
-                    if social.phase == .ready {
-                        Task { await sendRequest() }
-                    } else {
-                        requestAfterSignIn = true
-                        signingIn = true
-                    }
-                } label: {
-                    HStack {
-                        Label(requested ? "Sent to Dining" : "Ask Dining to serve this more",
-                              systemImage: requested ? "checkmark.circle.fill" : "hand.raised")
-                        if requesting { Spacer(); ProgressView() }
-                    }
-                }
-                .disabled(requested || requesting)
             } footer: {
-                Text("Requests reach Dartmouth Dining in one email a day, without your name.")
+                Text("You'll get a notification the day it's on the menu.")
             }
 
             Section("Nutrition") {
@@ -104,22 +83,6 @@ struct FoodDetailView: View {
         }
         .onBackdrop()
         .navigationBarTitleDisplayMode(.inline)
-        .sheet(isPresented: $signingIn) { SignInSheet(reason: "Sign in with your NetID to send food requests to Dining.") }
-        .onChange(of: social.phase) {
-            if social.phase == .ready && requestAfterSignIn {
-                requestAfterSignIn = false
-                Task { await sendRequest() }
-            }
-        }
-    }
-
-    private func sendRequest() async {
-        requesting = true
-        if await social.request(food: item.name, meal: route.meal, note: "") {
-            prefs.follow(item.name)
-            requested = true
-        }
-        requesting = false
     }
 
     private func stat(_ label: String, _ value: Double?, _ unit: String, decimals: Int = 0) -> some View {

@@ -19,16 +19,27 @@ enum AppInvite {
     }
 }
 
-/// A button that opens Messages with the invite, or the share sheet on devices that can't text.
+/// A button that opens Messages with the invite.
 struct InviteByTextButton<Label: View>: View {
     @Environment(SocialStore.self) private var social
+    @ViewBuilder var label: () -> Label
+
+    var body: some View {
+        TextMessageButton(message: { AppInvite.message(from: social.me) }, label: label)
+    }
+}
+
+/// A button that opens Messages with a message already written (you pick who it goes to), or the share sheet on
+/// devices that can't text. Conversations stay in the group chats people already have.
+struct TextMessageButton<Label: View>: View {
+    let message: () -> String
     @ViewBuilder var label: () -> Label
     @State private var composing = false
 
     var body: some View {
         Button { composing = true } label: { label() }
             .sheet(isPresented: $composing) {
-                let body = AppInvite.message(from: social.me)
+                let body = message()
                 if MFMessageComposeViewController.canSendText() {
                     MessageComposer(body: body).ignoresSafeArea()
                 } else {

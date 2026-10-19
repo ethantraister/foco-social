@@ -1,20 +1,20 @@
 # FoCo Social (v2)
 
-The FoCo menu app plus a social layer: see which friends are at FoCo, plan meals, and chat. v1 (menu only) lives in `~/FoCoApp`. The two apps have different bundle IDs, so both can be installed side by side.
+See which friends are at FoCo, and what's on. Two things, done well: **Together** (who's there, who's going soon and to which side, plans for later) and the **Menu** (what's on, desserts, diet filters, alerts for favorite foods). Everything else is settings. See `docs/strategy.md` for why. v1 (menu only) lives in `~/FoCoApp`. The two apps have different bundle IDs, so both can be installed side by side.
 
 ## Tabs
 
 | Tab | What it does |
 |---|---|
 | **Menu** | Today's FoCo menu by station: each station's main dishes, with "More from <station>" for sides and everyday items (pizza counts as everyday). Desserts get their own section at the top. Plus a line like "Jordan and 2 others are eating dinner" when friends are going |
-| **Chats** | Messages with friends, each group's chat, and a chat for each meal plan you're in (host, invited, going, maybe). New messages show up within a few seconds while a chat is open. Press and hold a message to copy, unsend, report, or block |
-| **Together** (the big middle button; the app opens here) | Invites for you (meal plans and group invites) · "Going soon" (15 min, 30 min, 1 hour, or a time you pick; which side; quiet or out loud; all friends or close friends) · friends at FoCo now, with "On my way" · plans (tap one for who's coming and its chat; Going / Maybe / Can't, tap again to take it back) · automatic check-in |
-| **Alerts** | Follow foods (same as v1) |
-| **Me** | Profile, friends and groups, invite friends by text, check in automatically, diet, food requests, notifications, About (community rules, blocked people, privacy, contact), sign out, delete account |
+| **Together** (the big middle button; the app opens here) | Invites for you (meal plans and group invites) · "Going soon" (15 min, 30 min, 1 hour, or a time you pick; which side; quiet or out loud; all friends or close friends) · friends at FoCo now and heading over, with "I'm coming" · plans (tap one for who's coming and to text about it; Going / Maybe / Can't, tap again to take it back) · automatic check-in |
+| **Me** | Profile, friends and groups, invite friends by text, check in automatically, diet, food alerts, notifications, About (community rules, blocked people, privacy, contact), sign out, delete account |
 
-Swipe sideways anywhere on a tab's first screen to move to the tab beside it, in the bar's order (like Instagram). On a screen pushed on top (a dish, a chat, a plan), a sideways swipe goes back instead, and a row that slides open (Remove, Unfollow, Alert me) opens rather than changing tabs.
+Food alerts (follow a food, see when it's on next) open from the bell on the menu, or by swiping right on a dish. There's no in-app chat: a plan's **Text about this plan** opens Messages with it written out, so conversations stay in the group chats people already have. Press and hold anyone's name to report (an email to `SUPPORT_EMAIL`) or block them. Signing up ends on "Add your friends" (skippable), since seeing friends at FoCo is the point.
 
-The Menu and Alerts tabs work without an account. Together and Chats ask you to sign in with your NetID: the app emails a 6-digit code to NetID@dartmouth.edu (no password). Losing signal never signs you out; the app opens to what it last loaded.
+Swipe sideways anywhere on a tab's first screen to move to the tab beside it, in the bar's order (like Instagram). On a screen pushed on top (a dish, a plan), a sideways swipe goes back instead, and a row that slides open (Remove, Unfollow, Alert me) opens rather than changing tabs.
+
+The Menu (and food alerts) work without an account. Together asks you to sign in with your NetID: the app emails a 6-digit code to NetID@dartmouth.edu (no password). Losing signal never signs you out; the app opens to what it last loaded.
 
 FoCo is open 7:30 AM–8:30 PM and 9:30 PM–1:30 AM. Plans, going soon, and checking in by hand turn away times when it's closed, with a popup saying when it opens. A plan's meal (breakfast, lunch, dinner, late night) follows from its time.
 
@@ -38,9 +38,9 @@ Off until you turn it on (Together tab or Me tab). iOS watches a 70 m circle aro
 
 Dining periods (from Dartmouth Dining): breakfast 7:30–11, lunch 11–4, dinner 4–8:30, late night 9:30 PM–1:30 AM.
 
-## Food requests → daily email to Dining
+## Food requests → daily email to Dining (switched off in the app)
 
-Students send requests in the app (Me → Food requests): 10 a day max, one per food per day. Others can tap "Me too." The `daily-requests` Edge Function (`supabase/functions/daily-requests/`) emails one summary at 7 AM New York time: each food, how many students, which meals, up to three notes. No names. Setup on the live project:
+The app no longer offers food requests: it promised they reach Dartmouth Dining, and Dining hasn't agreed to receive them (the digest goes to `DIGEST_TO`). Bring the screen back from git history (`RequestsView.swift`, the dish page's "Ask Dining") once Dining is on board; the server side is unchanged. When it was on, students sent requests (10 a day max, one per food per day) and the `daily-requests` Edge Function (`supabase/functions/daily-requests/`) emailed one summary at 7 AM New York time: each food, how many students, which meals, up to three notes. No names. Setup on the live project:
 
 1. Edge Functions → Secrets: `GMAIL_USER`, `GMAIL_APP_PASSWORD`, `DIGEST_TO` (who gets it; currently focosocial.app@gmail.com until Dining agrees), `CRON_SECRET` (random).
 2. Run `backend/migrations/003_daily_requests_cron.sql` with the two placeholders filled in.
@@ -74,15 +74,27 @@ Changes after the first deploy live in `backend/migrations/` (already folded int
 
 `009_lock_row_owners.sql` (security fix: whoever received a friend request could rewrite its sender to anyone and accept it, a fake friendship that showed that person's check-ins; plan replies get the same lock) was run on live on 11 Oct 2026.
 
-`010_social_v2.sql` (build 2: close friends, "Me too" remembers who you're joining, group invites you accept, taking back an RSVP, chats, push notifications and settings) is for build 2. Build 1 keeps working after it runs: adding someone to a group just becomes an invite, and `invited_by` is deliberately not a foreign key so build 1's group query stays unambiguous.
+`010_social_v2.sql` (build 2: close friends, "Me too" (now "I'm coming") remembers who you're joining, group invites you accept, taking back an RSVP, chats, push notifications and settings) is for build 2. Build 1 keeps working after it runs: adding someone to a group just becomes an invite, and `invited_by` is deliberately not a foreign key so build 1's group query stays unambiguous.
+
+`011_usage_days.sql` counts which features each person used on which day (no times, places, or content), so you can see what students actually use before cutting or adding anything. The app only adds rows; people can see only their own. Builds before 1.1 never write here, and the app works the same before it's run. Read it in the SQL Editor:
+
+```sql
+select * from usage_by_day where day > current_date - 14;   -- people per feature per day
+select * from usage_weekly_retention;                        -- of each week's new people, how many came back
+select count(distinct user_id) filter (where day = current_date) * 1.0
+     / nullif(count(distinct user_id) filter (where day > current_date - 30), 0) as dau_over_mau
+from usage_days;
+```
+
+The chat tables (`messages`, `chat_reads`, `message_reports`) are still in the database from build 2–4; nothing new writes them, and they're removed with each account.
 
 ## Tests
 
 ```sh
-# API + privacy rules (182 checks): run while the server is up
+# API + privacy rules (192 checks): run while the server is up
 ~/FoCoSocial-devtools/venv/bin/python backend/local/test_api.py <server log file>
 
-# UI tests: tours of every screen, chats, plan editing and closed hours, swiping between tabs (and back from pushed screens),
+# UI tests: tours of every screen, plan editing and closed hours, swiping between tabs (and back from pushed screens),
 # a stress run of fast swipes and taps, accessibility audit, large text, dark mode, photo upload, staying signed in offline
 ~/FoCoSocial-devtools/runtests.sh ~/FoCoSocial /tmp/shots   # uses -useLocalServer, so the live Info.plist keys are ignored
 ```
@@ -100,16 +112,15 @@ The local server has two test-only helpers: `POST /dev/offline?seconds=N` drops 
 ## Before submitting to the App Store
 
 1. **App Review account.** Reviewers can't receive a Dartmouth email, so the NetID in `REVIEW_NETID` (`focoreview`) signs in with a password instead of a code. Create it in Supabase: Authentication → Users → Add user → `focoreview@dartmouth.edu`, a strong password, Auto Confirm User. Give the NetID and password to Apple in App Store Connect → App Review Information. Consider adding it as a friend and posting a plan, so the reviewer sees the social side working.
-2. **Privacy policy URL.** Host `docs/privacy.html` (GitHub Pages, Google Sites) and put its address in App Store Connect. The same text is in the app under Me → About → Privacy. In App Privacy, declare: email address, name, user ID, photos, other user content, and emails or text messages (the chats), all linked to the user, used for app functionality, not tracking (it matches `PrivacyInfo.xcprivacy`).
-3. **Contact.** `SUPPORT_EMAIL` in `Info.plist` (now focosocial.app@gmail.com) is the Me → About → Contact us link. Apps where people message each other must publish a way to reach you.
+2. **Privacy policy URL.** Host `docs/privacy.html` (GitHub Pages, Google Sites) and put its address in App Store Connect. The same text is in the app under Me → About → Privacy. In App Privacy, declare: email address, name, user ID, photos, and other user content, linked to the user, for app functionality; and product interaction (the daily feature counts), linked to the user, for analytics. None of it is tracking. This matches `PrivacyInfo.xcprivacy`. (Builds 1–4 also declared emails or text messages for the chats; that can come off once no chat build is in use.)
+3. **Contact.** `SUPPORT_EMAIL` in `Info.plist` (now focosocial.app@gmail.com) is the Me → About → Contact us link. Apps with profiles people can report must publish a way to reach you.
 4. **Permissions from Dartmouth** for the D-Pine logo, the name, and using Dining's menu feed.
 5. Export compliance is already answered in the build (`ITSAppUsesNonExemptEncryption = NO`: the app only uses HTTPS).
 
 ## What's not built yet
 
 - **Crowd meter** (how busy FoCo is). Left out on purpose until enough people use the app for a count to mean something.
-- **A moderation dashboard.** Reported messages are in the `message_reports` table; review them in the Supabase table editor for now.
-- **Real-time chat over a socket.** An open chat checks for new messages every 3 seconds; push notifications cover the rest.
+- **A moderation dashboard.** Reports arrive by email (press and hold someone's name → Report); old reported messages are in `message_reports`.
 - **The old feed's data.** The Feed tab is gone; the `posts` tables are still in the database (nothing reads them) and are removed with each account.
 
 ## Privacy model (enforced in the database, tested in `test_api.py`)
@@ -117,10 +128,9 @@ The local server has two test-only helpers: `POST /dev/offline?seconds=N` drops 
 - Only `@dartmouth.edu` emails can create a profile.
 - Check-ins and plans are visible only to friends (or only close friends, if you pick that), or to the people invited or the group. Check-ins expire after at most 3 hours.
 - Your close friends list is readable only by you; nobody can ask the server who marked whom.
-- Hosts can only invite friends. Groups can invite anyone on the app (teams and clubs aren't all friends), but you're only in once you accept; until then you see the group's name and members, not its plans or chat. Being in a group never shows you members' check-ins.
-- Messages: between friends only, or within a group you joined, or within a plan you're part of. At most 200 an hour per person. You can unsend your own.
+- Hosts can only invite friends. Groups can invite anyone on the app (teams and clubs aren't all friends), but you're only in once you accept; until then you see the group's name and members, not its plans. Being in a group never shows you members' check-ins.
 - Phones' push tokens and the notification queue can't be read by anyone but the server, and nobody can send a notification directly.
 - Other people's email addresses can't be read, and people search matches names only.
-- Blocking hides plans, check-ins and messages in both directions, and can be undone from Me → About → Blocked people. Reporting a message hides it for the reporter right away.
-- At most 10 food requests a day per person.
-- People can delete their account from the app, which removes all their data, photos and messages included.
+- Blocking hides plans and check-ins in both directions, and can be undone from Me → About → Blocked people.
+- Feature counts: you can add only your own, only for today, and see only your own; the summaries are for the owner (SQL Editor).
+- People can delete their account from the app, which removes all their data, photos and feature counts included.

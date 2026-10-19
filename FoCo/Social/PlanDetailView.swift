@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// A meal plan's page: when and where, your answer, the plan's chat, and everyone invited, by answer.
+/// A meal plan's page: when and where, your answer, and everyone invited, by answer.
 /// Plans often mix friend groups, so people you don't know yet get an Add friend button.
 struct PlanDetailView: View {
     @Environment(SocialStore.self) private var social
@@ -37,7 +37,6 @@ struct PlanDetailView: View {
         let me = social.myId
         let isHost = plan.host.id == me
         let status = plan.status(of: me)
-        let inChat = isHost || [.going, .maybe, .invited].contains(status)
         return List {
             // The plan itself, on the backdrop: who it's with, when, the note, and your answer.
             Section {
@@ -80,18 +79,15 @@ struct PlanDetailView: View {
             }
 
             Section {
-                if inChat {
-                    NavigationLink { ChatView(target: .plan(plan.id)) } label: {
-                        Label("Plan chat", systemImage: "bubble.left.and.bubble.right")
-                            .labelStyle(.tile(.dartmouthDeep))
-                            .badge(social.chats.first { $0.target == .plan(plan.id) }?.unread ?? 0)
-                    }
-                } else {
-                    Label("Answer Going or Maybe to join the chat", systemImage: "bubble.left.and.bubble.right")
-                        .foregroundStyle(.secondary)
+                TextMessageButton(message: {
+                    social.noteUse(.textPlan)
+                    return message(about: plan)
+                }) {
+                    Label("Text about this plan", systemImage: "message")
+                        .labelStyle(.tile(.dartmouthDeep))
                 }
             } footer: {
-                if inChat { Text("For “running 5 minutes late” and “we're on dark side.”") }
+                Text("Opens Messages with the plan written out, for your group chat or anyone else.")
             }
 
             peopleSection("Going", [plan.host] + plan.going.filter { $0.id != plan.host.id })
@@ -118,6 +114,15 @@ struct PlanDetailView: View {
         .refreshable { await social.refreshTogether() }
         .sheet(isPresented: $editing) { PlanComposer(editing: plan) }
         .sheet(isPresented: $inviting) { InviteFriendsSheet(plan: plan) }
+    }
+
+    /// "Dinner at FoCo, Today · 6:30 PM (“window tables”)." You add the rest and pick who it goes to.
+    private func message(about plan: Plan) -> String {
+        var text = "\(plan.mealKind?.title ?? "Meal") at FoCo, \(plan.timeLabel)"
+        if let note = plan.note, !note.isEmpty { text += " (“\(note)”)" }
+        text += ". Tap Going on FoCo Social if you're in."
+        if let link = AppInvite.link { text += "\n\n\(link.absoluteString)" }
+        return text
     }
 
     @ViewBuilder private func peopleSection(_ title: String, _ people: [Person]) -> some View {

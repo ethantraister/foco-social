@@ -16,8 +16,10 @@ struct FoCoApp: App {
         UNUserNotificationCenter.current().delegate = NotificationRouter.shared
         // Photos stay on disk between launches. Every upload has its own file name, so they never go stale.
         URLCache.shared = URLCache(memoryCapacity: 16 << 20, diskCapacity: 200 << 20)
-        // Everyone lands on Together. (A notification that opened the app moves to its own screen after this.)
-        UserDefaults.standard.set(AppTab.together.rawValue, forKey: "tab")
+        // Signed in, you land on Together. Before that, on the menu: it's useful right away, and signing in waits
+        // until you want the friends side. (A notification that opened the app moves to its own screen after this.)
+        let home: AppTab = SocialStore.shared.phase == .signedOut ? .menu : .together
+        UserDefaults.standard.set(home.rawValue, forKey: "tab")
     }
 
     var body: some Scene {
@@ -89,7 +91,7 @@ struct ContentView: View {
                         // "Plan cancelled · Undo" and other notes, just above the bottom bar on every tab.
                         if let toast = social.toast { ToastBar(toast: toast).padding(.bottom, bar.visible ? 0 : 64) }
                         if bar.visible {
-                            FoCoTabBar(selection: $tab, chatsBadge: social.unreadMessages, togetherBadge: social.togetherBadge)
+                            FoCoTabBar(selection: $tab, togetherBadge: social.togetherBadge)
                                 .transition(.move(edge: .bottom).combined(with: .opacity))
                         }
                     }

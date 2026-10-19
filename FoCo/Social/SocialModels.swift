@@ -32,7 +32,7 @@ struct Checkin: Codable, Identifiable, Hashable {
     let startedAt: Date
     let expiresAt: Date
     var audience: ShareWith? = nil
-    /// The friend they said "Me too" / "On my way" to.
+    /// The friend they tapped I'm coming on.
     var joining: UUID? = nil
     var id: UUID { user.id }
 
@@ -154,101 +154,6 @@ struct SocialGroup: Codable, Identifiable, Hashable {
         guard let by = groupMembers.first(where: { $0.userId == user })?.invitedBy else { return nil }
         return groupMembers.first { $0.userId == by }?.profiles
     }
-}
-
-/// A food request you sent through the app; Dining gets them in one email each morning.
-struct SentRequest: Codable, Identifiable, Hashable {
-    let id: UUID
-    let food: String
-    let meal: String?
-    let note: String?
-    let createdAt: Date
-    let sentAt: Date?
-
-    var mealKind: Meal? { meal.flatMap(Meal.init(rawValue:)) }
-}
-
-struct PopularRequest: Codable, Identifiable, Hashable {
-    let food: String
-    let students: Int
-    let mine: Bool
-    var id: String { food.lowercased() }
-}
-
-// MARK: Chat
-
-/// A chat: a group's, a meal plan's, or messages with one friend.
-enum ChatTarget: Hashable, Codable {
-    case group(UUID)
-    case plan(UUID)
-    case dm(UUID)
-
-    var kind: String {
-        switch self {
-        case .group: "group"
-        case .plan: "plan"
-        case .dm: "dm"
-        }
-    }
-
-    var id: UUID {
-        switch self {
-        case .group(let id), .plan(let id), .dm(let id): id
-        }
-    }
-
-    /// "group:<id>": the server's name for it (read receipts, notifications).
-    var key: String { "\(kind):\(id.uuidString.lowercased())" }
-
-    init?(key: String) {
-        let parts = key.split(separator: ":", maxSplits: 1).map(String.init)
-        guard parts.count == 2, let id = UUID(uuidString: parts[1]) else { return nil }
-        switch parts[0] {
-        case "group": self = .group(id)
-        case "plan": self = .plan(id)
-        case "dm": self = .dm(id)
-        default: return nil
-        }
-    }
-}
-
-struct ChatThread: Codable, Identifiable, Hashable {
-    struct PlanInfo: Codable, Hashable {
-        let id: UUID
-        let meal: String
-        let startsAt: Date
-        let host: Person
-        let group: GroupRef?
-    }
-    struct Sender: Codable, Hashable {
-        let id: UUID
-        let name: String
-    }
-
-    let kind: String
-    let id: UUID
-    let person: Person?
-    let group: GroupRef?
-    let plan: PlanInfo?
-    let lastBody: String?
-    let lastAt: Date?
-    let lastSender: Sender?
-    var unread: Int
-
-    var target: ChatTarget {
-        switch kind {
-        case "group": .group(id)
-        case "plan": .plan(id)
-        default: .dm(id)
-        }
-    }
-}
-
-struct ChatMessage: Codable, Identifiable, Hashable {
-    let id: UUID
-    let body: String
-    let createdAt: Date
-    let sender: Person
 }
 
 // MARK: Notifications

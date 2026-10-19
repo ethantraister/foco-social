@@ -1,7 +1,7 @@
 import XCTest
 
 /// Swiping sideways between tabs, like Instagram's: it follows the bar's order, stops at both ends, and a screen
-/// pushed on top of a tab swipes back instead of changing tabs. Works signed out (Menu and Alerts don't need an account).
+/// pushed on top of a tab swipes back instead of changing tabs. Works signed out (Menu and Me don't need an account).
 final class PagerTests: XCTestCase {
     private var app: XCUIApplication!
     private var shot = 0
@@ -14,31 +14,26 @@ final class PagerTests: XCTestCase {
     }
 
     func testSwipeBetweenTabs() {
-        XCTAssertTrue(app.buttons["tab.Together"].waitForExistence(timeout: 5))
-        XCTAssertTrue(selected("Together"))
+        XCTAssertTrue(app.buttons["tab.Menu"].waitForExistence(timeout: 5))
+        XCTAssertTrue(selected("Menu"), "signed out, it opens on the menu")
+        XCTAssertTrue(app.navigationBars["FoCo"].waitForExistence(timeout: 3))
+        snap("menu")
+        swipe(left: false)  // the first page: nowhere further to go
+        XCTAssertTrue(waitSelected("Menu"))
+
+        swipe(left: true)
+        XCTAssertTrue(waitSelected("Together"))
         snap("together")
-
-        swipe(left: true)
-        XCTAssertTrue(waitSelected("Alerts"))
-        XCTAssertTrue(app.navigationBars["Alerts"].waitForExistence(timeout: 3))
-        snap("alerts")
         swipe(left: true)
         XCTAssertTrue(waitSelected("Me"))
+        XCTAssertTrue(app.navigationBars["Me"].waitForExistence(timeout: 3))
         snap("me")
-        swipe(left: true)   // the last page: nowhere further to go
+        swipe(left: true)   // the last page
         XCTAssertTrue(waitSelected("Me"))
 
-        swipe(left: false)
-        XCTAssertTrue(waitSelected("Alerts"))
         swipe(left: false)
         XCTAssertTrue(waitSelected("Together"))
         swipe(left: false)
-        XCTAssertTrue(waitSelected("Chats"))
-        swipe(left: false)
-        XCTAssertTrue(waitSelected("Menu"))
-        XCTAssertTrue(app.navigationBars["FoCo"].waitForExistence(timeout: 3))
-        snap("menu")
-        swipe(left: false)  // the first page
         XCTAssertTrue(waitSelected("Menu"))
 
         // The dessert cards slide on their own instead of changing tabs.
@@ -80,7 +75,7 @@ final class PagerTests: XCTestCase {
         back.tap()
         sleep(1)
         swipe(left: true)
-        XCTAssertTrue(waitSelected("Chats"), "back on Menu's first screen, swiping works again")
+        XCTAssertTrue(waitSelected("Together"), "back on Menu's first screen, swiping works again")
     }
 
     /// On a screen pushed on top of a tab, swiping right goes back, from the screen's edge or (iOS 26) anywhere on it.
@@ -105,6 +100,7 @@ final class PagerTests: XCTestCase {
 
     /// Pages still move up for the keyboard: the button under the NetID field stays reachable.
     func testKeyboardKeepsTheSignInButtonReachable() {
+        app.buttons["tab.Together"].tap()   // signed out, the app opens on the menu
         let email = app.textFields["NetID"]
         XCTAssertTrue(email.waitForExistence(timeout: 5))
         email.tap()
@@ -152,16 +148,17 @@ final class PagerTests: XCTestCase {
         if app.buttons["Alert me"].exists && app.buttons["Alert me"].isHittable { dish.swipeLeft(); sleep(1) }
         snap("dish-row-closed")
 
-        // A row with nothing on that side lets the pages move: swiping left across a dish goes to Chats.
+        // A row with nothing on that side lets the pages move: swiping left across a dish goes to Together.
         let y = dish.frame.midY / app.frame.height
         swipe(left: true, y: y)
         snap("after-dish-swipe-left")
-        XCTAssertTrue(waitSelected("Chats"), "a dish has no button on its right, so the swipe changes tabs")
+        XCTAssertTrue(waitSelected("Together"), "a dish has no button on its right, so the swipe changes tabs")
     }
 
     private func signUp() {
         app.terminate()
         app.launch()
+        app.buttons["tab.Together"].tap()   // signed out, the app opens on the menu
         let email = app.textFields["NetID"]
         XCTAssertTrue(email.waitForExistence(timeout: 5))
         email.tap()
@@ -180,6 +177,9 @@ final class PagerTests: XCTestCase {
         app.swipeUp()
         app.switches.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
         app.buttons["Join FoCo Social"].tap()
+        // Signing up ends on adding friends (it can wait).
+        XCTAssertTrue(app.navigationBars["Add your friends"].waitForExistence(timeout: 8), "signing up ends on adding friends")
+        app.navigationBars.buttons.matching(NSPredicate(format: "label IN {'Later', 'Done'}")).firstMatch.tap()
         XCTAssertTrue(app.navigationBars["Together"].waitForExistence(timeout: 8))
         let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
         for label in ["Allow", "Allow While Using App"] where springboard.buttons[label].waitForExistence(timeout: 2) {

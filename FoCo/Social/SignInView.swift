@@ -11,6 +11,17 @@ struct SignInGate<Content: View>: View {
 
     var body: some View {
         switch social.phase {
+        // Just joined: adding friends is the last step, since seeing them at FoCo is the point. Skippable.
+        case .ready where social.showWelcome:
+            NavigationStack {
+                FriendsView(embedded: true, welcome: true)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button(social.friends.isEmpty && social.outgoing.isEmpty ? "Later" : "Done") { social.showWelcome = false }
+                        }
+                    }
+                    .tabRoot()
+            }
         case .ready: content()
         case .loading: NavigationStack { ProfileLoadingView().toolbar { cancelButton }.tabRoot() }
         case .needsProfile: NavigationStack { ProfileSetupView().toolbar { cancelButton }.tabRoot() }
@@ -26,7 +37,7 @@ struct SignInGate<Content: View>: View {
     }
 }
 
-/// Sign in from somewhere that works without an account (Me, food requests, a dish): a sheet that closes itself once you're in.
+/// Sign in from somewhere that works without an account (Me): a sheet that closes itself once you're in.
 struct SignInSheet: View {
     @Environment(\.dismiss) private var dismiss
     let reason: String
@@ -238,7 +249,7 @@ struct ProfileSetupView: View {
 
             Section {
                 Toggle(isOn: $agreed) {
-                    Text("I'll keep it kind: no harassment, hate, nudity, or posting people without asking. Messages that break this get removed and accounts banned.")
+                    Text("I'll keep it kind: no harassment, hate, nudity, or posting people without asking. Anything that breaks this gets removed and accounts banned.")
                         .font(.subheadline)
                 }
             } header: {

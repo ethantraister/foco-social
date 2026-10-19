@@ -1,7 +1,7 @@
 import SwiftUI
 import UIKit
 
-/// The five tabs side by side, swiped between like Instagram's. Built on UIKit's page controller rather than a
+/// The tabs side by side, swiped between like Instagram's. Built on UIKit's page controller rather than a
 /// SwiftUI scroll view: each tab then lays out as a full screen of its own (the keyboard pushes it up, the safe
 /// areas are right), only the tab on screen stays loaded (its timers stop when you leave, as before), and tapping the
 /// status bar still scrolls it to the top.
@@ -28,9 +28,11 @@ struct TabPager: UIViewControllerRepresentable {
         pager.delegate = coordinator
         // Set once and left alone: UIKit's page controller can crash if its data source changes while pages move.
         pager.dataSource = coordinator
-        pager.setViewControllers([coordinator.pages[selection]], direction: .forward, animated: false)
+        // A tab saved by an older version (which had more of them) falls back to Together.
+        let start = AppTab(rawValue: selection)?.rawValue ?? AppTab.together.rawValue
+        pager.setViewControllers([coordinator.pages[start]], direction: .forward, animated: false)
         coordinator.pager = pager
-        coordinator.current = selection
+        coordinator.current = start
         if let scroll = pager.view.subviews.lazy.compactMap({ $0 as? UIScrollView }).first {
             // Only the page's own list should answer a tap on the status bar.
             scroll.scrollsToTop = false
@@ -90,7 +92,7 @@ struct TabPager: UIViewControllerRepresentable {
 
         /// Jumps straight to a tab, once the pages are still.
         func show(_ index: Int) {
-            guard index != current else { pendingTab = nil; return }
+            guard pages.indices.contains(index), index != current else { pendingTab = nil; return }
             guard let pager, !moving else { pendingTab = index; return }
             pendingTab = nil
             pager.setViewControllers([pages[index]], direction: index > current ? .forward : .reverse, animated: false)
@@ -206,10 +208,8 @@ struct TabPage: View {
     @ViewBuilder private var content: some View {
         switch tab {
         case .menu: MenuView()
-        case .chats: SignInGate(reason: "Message friends, your groups, and the people in each meal plan.") { ChatsView() }
         case .together:
             SignInGate(reason: "See which friends are at FoCo right now, make meal plans, and get invited to team dinners.") { TogetherView() }
-        case .alerts: AlertsView()
         case .me: MeView()
         }
     }
