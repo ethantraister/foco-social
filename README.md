@@ -95,13 +95,22 @@ The chat tables (`messages`, `chat_reads`, `message_reports`) are still in the d
 ## Tests
 
 ```sh
-# API + privacy rules (192 checks): run while the server is up
+# API + privacy rules (201 checks): run while the server is up
 ~/FoCoSocial-devtools/venv/bin/python backend/local/test_api.py <server log file>
 
 # UI tests: tours of every screen, plan editing and closed hours, swiping between tabs (and back from pushed screens),
 # a stress run of fast swipes and taps, accessibility audit, large text, dark mode, photo upload, staying signed in offline
 ~/FoCoSocial-devtools/runtests.sh ~/FoCoSocial /tmp/shots   # uses -useLocalServer, so the live Info.plist keys are ignored
 ```
+
+Tapping a notification while the app is in the background (`NotificationTapTests`) needs a push from outside the simulator, so it's skipped unless `TEST_RUNNER_NOTIFICATION_TAP=1`. While it waits, send pushes whose title is "Tap test":
+
+```sh
+echo '{"Simulator Target Bundle":"com.ethantraister.FoCoSocial","aps":{"alert":{"title":"Tap test","body":"Tap me"}}}' > /tmp/push.json
+xcrun simctl push <simulator id> com.ethantraister.FoCoSocial /tmp/push.json   # repeat every few seconds until the test taps one
+```
+
+Before 20 Oct 2026 every such tap crashed the app (the notification handler finished off the main thread).
 
 The local server has two test-only helpers: `POST /dev/offline?seconds=N` drops every connection for N seconds (like losing signal), and NetIDs starting with `shortlived.` get tokens that need refreshing before every request.
 
