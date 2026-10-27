@@ -6,14 +6,13 @@ As of 27 Oct 2026 (build 1.1 (11)). Dartmouth Dining has agreed to sponsor the a
 
 - App works end to end on the live server: sign-in, menu and diet filters, food alerts, friends and close friends, automatic and manual check-in, going soon, plans, groups, notifications, report and block, account deletion.
 - Notification taps no longer crash the app (build 10). All testers are on build 10.
-- Privacy fixes live: the privacy helpers aren't callable (migration 013). Migration 015 (old chat messages can't trigger notifications) is ready to run.
+- Privacy fixes live: the privacy helpers aren't callable (migration 013). Migration 015 (old chat messages can't trigger notifications) is live too.
 - 200 server checks and 17 UI tests pass (iOS 26.5 and 27), plus the notification-tap test.
 - Privacy manifest, export compliance (no encryption beyond HTTPS), account deletion in the app, report and block (press and hold a person), community-rules agreement at sign-up.
 
 ## Ethan: before submitting
 
-1. **Run migration 015** on the live project (SQL Editor). Safe to run twice.
-2. **Ask Dining** what the sponsorship covers:
+1. **Ask Dining** what the sponsorship covers:
    - Can the app say "In partnership with Dartmouth Dining" (welcome screen, About, App Store description)?
    - The D-Pine logo is the College's mark, not Dining's: does Dining have the College's OK, or should the app use its own icon only? (Apple rejects apps that use another organization's marks without permission.)
    - Could Dining host the privacy policy and support pages (for example on dining.dartmouth.edu)?
@@ -21,14 +20,14 @@ As of 27 Oct 2026 (build 1.1 (11)). Dartmouth Dining has agreed to sponsor the a
    - Should students' food requests come back, and to whom (an address at Dining)?
    - Would a Dining dietitian review the allergen wording?
    - Promotion: table tents or QR codes at Foco on launch day?
-3. **Privacy policy and support pages online.** Apple needs both URLs. `docs/privacy.html` is ready. Options: Dining's site, your own domain, or a public GitHub Pages site (I can set that up if you OK making those pages public). Then I add the privacy link to About.
-4. **Email that can handle launch day.**
+2. **Privacy policy and support pages online.** Apple needs both URLs. `docs/privacy.html` is ready. Options: Dining's site, your own domain, or a public GitHub Pages site (I can set that up if you OK making those pages public). Then I add the privacy link to About.
+3. **Email that can handle launch day.**
    - Gmail sends a few hundred emails a day at most, and Supabase's default email rate limit is low (Authentication → Rate Limits; raise it).
    - Better: a domain plus a sending service (Resend, Postmark, Amazon SES), set as Supabase's SMTP.
    - Rename the sender to "Foco Polo" either way.
-5. **Supabase Pro** before launch: the free plan has no backups and pauses after a week without use.
-6. **App Review account.** Supabase → Authentication → Users → Add user: `focoreview@dartmouth.edu`, a password, "Auto Confirm User" on. Sign in once on a phone (NetID `focoreview`) to make its profile, then friend it from your account and post a plan so reviewers don't see an empty app.
-7. **Invite link.** App Store Connect → App Information → Apple ID (a number). Send it to me; invites then link to `https://apps.apple.com/app/id<number>`, which works as soon as the app is live.
+4. **Supabase Pro** before launch: the free plan has no backups and pauses after a week without use.
+5. **App Review account.** Supabase → Authentication → Users → Add user: `focoreview@dartmouth.edu`, a password, "Auto Confirm User" on. Sign in once on a phone (NetID `focoreview`) to make its profile, then friend it from your account and post a plan so reviewers don't see an empty app.
+6. **Invite link.** App Store Connect → App Information → Apple ID (a number). Send it to me; invites then link to `https://apps.apple.com/app/id<number>`, which works as soon as the app is live.
 
 ## App Store listing (paste into App Store Connect)
 
