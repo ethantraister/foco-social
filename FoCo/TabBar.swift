@@ -24,11 +24,20 @@ final class TabBarState {
 
 /// The bottom bar: one floating Liquid Glass capsule with the three tabs. Together sits in the middle as a
 /// Dartmouth Green button (like Venmo's Pay/Request). The soft highlight behind the selected tab follows your
-/// finger while you swipe between pages.
+/// finger while you swipe between pages, and you can slide a finger along the bar itself, like Instagram's:
+/// the highlight swells and follows your finger, and letting go opens the tab under it.
 struct FoCoTabBar: View {
     @Binding var selection: Int
     let togetherBadge: Int
     @State private var bar = TabBarState.shared
+    /// Where a finger sliding along the bar is, across the tabs (nil when nobody's sliding).
+    @State private var fingerX: CGFloat?
+    /// The tab under that finger, for a tick each time it crosses into another one.
+    @State private var hovered: Int?
+    @State private var width: CGFloat = 0
+    /// When the last slide moved. A button that a slide started on would count the lift as its own tap if the finger
+    /// ends just past its edge, and jump straight back; taps right after a slide are ignored.
+    @State private var slidAt = Date.distantPast
 
     var body: some View {
         HStack(spacing: 0) {
@@ -37,6 +46,11 @@ struct FoCoTabBar: View {
             item(.me, "Me", "person.crop.circle", "person.crop.circle.fill")
         }
         .background { highlight }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+        // A tap still goes to the button under it; a slide (a few points or more) moves the highlight instead.
+        .simultaneousGesture(slide)
+        // A tick each time the finger crosses into another tab (not when it lands or lifts).
+        .sensoryFeedback(.selection, trigger: hovered) { old, new in old != nil && new != nil }
         .padding(.horizontal, 6)
         .frame(height: TabBarState.height)
         // Three tabs hug the middle, like the system's bar, instead of stretching edge to edge.
@@ -50,24 +64,60 @@ struct FoCoTabBar: View {
     }
 
     /// The soft pill behind the selected tab, like the system bar's. It fades on its way into Together, whose green
-    /// button stands out on its own.
+    /// button stands out on its own. While a finger slides along the bar it swells a little, darkens, and follows the
+    /// finger everywhere (peeking out around Together's button when it's there).
     private var highlight: some View {
         GeometryReader { geo in
             let slot = geo.size.width / CGFloat(AppTab.allCases.count)
             let at = bar.swipe ?? CGFloat(selection)
+            let sliding = fingerX != nil
+            let x = fingerX.map { min(max($0 - slot / 2, 0), geo.size.width - slot) } ?? at * slot
             Capsule()
-                .fill(Color.primary.opacity(0.07))
+                .fill(Color.primary.opacity(sliding ? 0.12 : 0.07))
                 .frame(width: slot)
-                .offset(x: at * slot)
-                .opacity(min(1, abs(at - CGFloat(AppTab.together.rawValue))))
-                .animation(bar.swipe == nil ? .snappy(duration: 0.28) : nil, value: at)
+                .scaleEffect(sliding ? 1.14 : 1)
+                .offset(x: x)
+                .opacity(sliding ? 1 : min(1, abs(at - CGFloat(AppTab.together.rawValue))))
+                .animation(sliding ? .interactiveSpring(response: 0.22, dampingFraction: 0.82) : bar.swipe == nil ? .snappy(duration: 0.28) : nil,
+                           value: x)
+                .animation(.snappy(duration: 0.2), value: sliding)
         }
         .accessibilityHidden(true)
     }
 
+    /// Sliding a finger along the bar: the highlight follows it, and letting go opens the tab under it.
+    private var slide: some Gesture {
+        DragGesture(minimumDistance: 8)
+            .onChanged { drag in
+                slidAt = .now
+                fingerX = drag.location.x
+                hovered = tab(at: drag.location.x)
+            }
+            .onEnded { drag in
+                slidAt = .now
+                let tab = tab(at: drag.location.x)
+                fingerX = nil
+                hovered = nil
+                if selection != tab { selection = tab }
+            }
+    }
+
+    /// A tap on a tab's button, unless it's the lift at the end of a slide.
+    private func tapped(_ tab: AppTab) {
+        guard Date.now.timeIntervalSince(slidAt) > 0.35 else { return }
+        selection = tab.rawValue
+    }
+
+    /// Which tab is under a point along the bar.
+    private func tab(at x: CGFloat) -> Int {
+        let count = AppTab.allCases.count
+        guard width > 0 else { return selection }
+        return min(max(Int(x / (width / CGFloat(count))), 0), count - 1)
+    }
+
     private func item(_ tab: AppTab, _ title: String, _ icon: String, _ selectedIcon: String, badge: Int = 0) -> some View {
         let selected = selection == tab.rawValue
-        return Button { selection = tab.rawValue } label: {
+        return Button { tapped(tab) } label: {
             VStack(spacing: 2) {
                 Image(systemName: selected ? selectedIcon : icon)
                     .font(.system(size: 19, weight: selected ? .semibold : .regular))
@@ -89,7 +139,7 @@ struct FoCoTabBar: View {
 
     private var together: some View {
         let selected = selection == AppTab.together.rawValue
-        return Button { selection = AppTab.together.rawValue } label: {
+        return Button { tapped(.together) } label: {
             VStack(spacing: 2) {
                 Image(systemName: "person.2.fill")
                     .font(.system(size: 19, weight: .semibold))

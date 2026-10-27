@@ -204,6 +204,31 @@ final class PagerTests: XCTestCase {
         sleep(1)
     }
 
+    /// Pressing on the bottom bar and sliding sideways, like Instagram's: letting go opens the tab under the finger.
+    func testSlideAlongTheTabBar() {
+        let menu = app.buttons["tab.Menu"], together = app.buttons["tab.Together"], me = app.buttons["tab.Me"]
+        XCTAssertTrue(menu.waitForExistence(timeout: 5))
+        XCTAssertTrue(selected("Menu"))
+
+        menu.press(forDuration: 0.15, thenDragTo: me, withVelocity: .slow, thenHoldForDuration: 0.3)
+        XCTAssertTrue(waitSelected("Me"), "slid all the way across to Me")
+        XCTAssertTrue(app.navigationBars["Me"].waitForExistence(timeout: 3), "and the Me page is showing")
+        snap("slid-to-me")
+
+        me.press(forDuration: 0.15, thenDragTo: together, withVelocity: .slow, thenHoldForDuration: 0.3)
+        snap("slid-back")
+        XCTAssertTrue(waitSelected("Together"), "slid back one tab")
+
+        // Sliding past the end of the bar still lands on the last tab.
+        let pastTheEnd = me.coordinate(withNormalizedOffset: CGVector(dx: 2.5, dy: 0.5))
+        together.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(forDuration: 0.15, thenDragTo: pastTheEnd)
+        XCTAssertTrue(waitSelected("Me"))
+
+        // A plain tap still works.
+        menu.tap()
+        XCTAssertTrue(waitSelected("Menu"))
+    }
+
     private func selected(_ tab: String) -> Bool { app.buttons["tab.\(tab)"].isSelected }
 
     private func waitSelected(_ tab: String) -> Bool {

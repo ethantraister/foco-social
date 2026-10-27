@@ -90,12 +90,14 @@ from usage_days;
 
 `013_private_helpers.sql` moves the small yes/no functions behind the privacy rules (`are_friends`, `is_blocked`, `marked_me_close`, …) into a `private` schema the API doesn't publish. Before it, any signed-in student could call them with anyone's ids and learn who is friends with whom, who blocked whom, and who starred them as a close friend. The rules work exactly as before. It also stops trigger functions being callable, pins three helpers' search_path, and switches off the daily food-request email job. Safe to run twice.
 
+`015_retire_chat_push.sql` (27 Oct 2026): chats left the app in build 1.1 (5), so a message written straight to the database no longer notifies anyone, and the food-request counts can't be called while requests are off. Safe to run twice.
+
 The chat tables (`messages`, `chat_reads`, `message_reports`) are still in the database from build 2–4; nothing new writes them, and they're removed with each account.
 
 ## Tests
 
 ```sh
-# API + privacy rules (201 checks): run while the server is up
+# API + privacy rules (200 checks): run while the server is up
 ~/FoCoSocial-devtools/venv/bin/python backend/local/test_api.py <server log file>
 
 # UI tests: tours of every screen, plan editing and closed hours, swiping between tabs (and back from pushed screens),
@@ -106,8 +108,7 @@ The chat tables (`messages`, `chat_reads`, `message_reports`) are still in the d
 Tapping a notification while the app is in the background (`NotificationTapTests`) needs a push from outside the simulator, so it's skipped unless `TEST_RUNNER_NOTIFICATION_TAP=1`. While it waits, send pushes whose title is "Tap test":
 
 ```sh
-echo '{"Simulator Target Bundle":"com.ethantraister.FoCoSocial","aps":{"alert":{"title":"Tap test","body":"Tap me"}}}' > /tmp/push.json
-xcrun simctl push <simulator id> com.ethantraister.FoCoSocial /tmp/push.json   # repeat every few seconds until the test taps one
+~/FoCoSocial-devtools/run-tap-test.sh /tmp/tap   # runs the test and sends a push every 4 s while it waits
 ```
 
 Before 20 Oct 2026 every such tap crashed the app (the notification handler finished off the main thread).

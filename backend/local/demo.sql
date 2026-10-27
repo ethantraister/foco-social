@@ -119,7 +119,7 @@ begin
 
   insert into plans (id, host, meal, starts_at, note, audience) values
     ('00000000-0000-4000-c000-000000000001', '00000000-0000-4000-a000-000000000001', 'lunch', next_lunch, 'Grabbing a window table, come through', 'friends'),
-    ('00000000-0000-4000-c000-000000000002', '00000000-0000-4000-a000-000000000003', 'dinner', next_dinner + interval '15 minutes', 'Post-launch-review dinner, low-key', 'invited');
+    ('00000000-0000-4000-c000-000000000002', '00000000-0000-4000-a000-000000000003', 'dinner', next_dinner + interval '15 minutes', 'Window tables on the light side', 'invited');
   insert into plans (id, host, meal, starts_at, note, audience, group_id) values
     ('00000000-0000-4000-c000-000000000003', '00000000-0000-4000-a000-000000000002', 'dinner', next_dinner, 'Team dinner after practice — whole team', 'group', '00000000-0000-4000-b000-000000000001'),
     ('00000000-0000-4000-c000-000000000004', '00000000-0000-4000-a000-000000000005', 'late-night', late, 'Quesadilla run', 'friends', null);

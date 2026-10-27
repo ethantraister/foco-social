@@ -823,8 +823,7 @@ begin
                      jsonb_build_object('chat', chat_key), chat_key, 'message');
   return new;
 end $$;
-create trigger messages_push after insert on public.messages
-  for each row execute function public.push_message();
+-- No trigger: chats left the app in build 1.1 (5), so messages notify nobody (migration 015).
 
 -- ───────────────────────── read models for the app ─────────────────────────
 -- These run as the caller (security invoker), so every row still passes the policies above.
@@ -1038,7 +1037,6 @@ language sql stable security definer set search_path = public as $$
   limit 15;
 $$;
 revoke all on function public.popular_requests(int) from public, anon;
-grant execute on function public.popular_requests(int) to authenticated;
 
 -- Everything not yet emailed, grouped by food. Only the daily-requests Edge Function (service role) can call it.
 create or replace function public.request_digest()
@@ -1074,6 +1072,8 @@ grant execute on all functions in schema public to authenticated;
 
 -- The daily email digest is for the server only.
 revoke execute on function public.request_digest() from authenticated;
+-- Food requests are off in the app, so their counts aren't callable either (migration 015).
+revoke execute on function public.popular_requests(int) from authenticated;
 
 -- Phones' push tokens and the notification queue are for the server only.
 revoke all on public.devices, public.push_queue, public.push_auth from authenticated;

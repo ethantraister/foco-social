@@ -139,7 +139,7 @@ final class SocialTourTests: XCTestCase {
         XCTAssertFalse(app.buttons["Join"].exists, "joined")
 
         // Answer an invite, then tap the same answer to take it back.
-        let invite = app.cells.containing(NSPredicate(format: "label CONTAINS 'Post-launch-review dinner'")).firstMatch
+        let invite = app.cells.containing(NSPredicate(format: "label CONTAINS 'Window tables on the light side'")).firstMatch
         XCTAssertTrue(invite.waitForExistence(timeout: 5), "a meal invite waits on Together")
         invite.buttons["Going"].tap()
         sleep(2)

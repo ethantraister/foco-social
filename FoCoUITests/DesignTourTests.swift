@@ -83,7 +83,8 @@ final class DesignTourTests: XCTestCase {
         let name = app.textFields["First and last name"]
         XCTAssertTrue(name.waitForExistence(timeout: 5))
         name.tap()
-        name.typeText("Ethan Traister\n")
+        // TOUR_NAME (TEST_RUNNER_TOUR_NAME) gives App Store screenshots a made-up student instead.
+        name.typeText((ProcessInfo.processInfo.environment["TOUR_NAME"] ?? "Ethan Traister") + "\n")
         sleep(1)
         app.swipeUp()
         app.switches.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
