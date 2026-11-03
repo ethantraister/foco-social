@@ -1,6 +1,31 @@
-# Foco (v2)
+# Foco
 
-See which friends are at Foco, and what's on. Two things, done well: **Together** (who's there, who's going soon and to which side, plans for later) and the **Menu** (what's on, desserts, diet filters, alerts for favorite foods). Everything else is settings. See `docs/strategy.md` for why. v1 (menu only) lives in `~/FoCoApp`. The two apps have different bundle IDs, so both can be installed side by side.
+**An iPhone app for Dartmouth students: see which friends are eating at Foco ('53 Commons), plan meals together, and check what's on the menu.** Native SwiftUI on a Supabase (PostgreSQL) backend, built and shipped through TestFlight by one person in fall 2026.
+
+<p>
+<img src="docs/screenshots/1-together.jpg" width="230" alt="Together tab">
+<img src="docs/screenshots/3-going-soon.jpg" width="230" alt="Going soon">
+<img src="docs/screenshots/5-menu.jpg" width="230" alt="Menu">
+</p>
+
+<sub>Screenshots use the made-up demo students from <code>backend/local/demo.sql</code>.</sub>
+
+**Engineering highlights**
+
+- **Privacy lives in the database, not the app.** Row-level-security policies decide who can see a check-in, plan, or profile (friends only, close friends, invited people, group members; blocks both ways). 15 migrations, all in `backend/migrations/`.
+- **Automated tests against the real schema:** an API/privacy suite (`backend/local/test_api.py`) runs against a local Postgres + PostgREST stand-in, plus Xcode UI tests (tours, accessibility, dark mode, large text, notification taps, stress).
+- **Push notifications** through APNs from a Supabase Edge Function (`supabase/functions/push`), fed by a database notification queue nobody but the server can read.
+- **Auto check-in** by geofence during dining hours (opt-in), with the location never leaving the phone.
+- **Live menu** from Dartmouth Dining's Nutrislice feed, grouped by station, with diet filters and food alerts.
+- A real crash fixed along the way: tapping a notification crashed the app because an async `UNUserNotificationCenterDelegate` callback completed off the main thread.
+
+Stack: Swift / SwiftUI (no third-party packages) · Supabase: PostgreSQL, PostgREST, Auth (email one-time codes), Storage, Edge Functions (Deno/TypeScript) · Python for the local test server.
+
+---
+
+## Details (for developers)
+
+See which friends are at Foco, and what's on. Two things, done well: **Together** (who's there, who's going soon and to which side, plans for later) and the **Menu** (what's on, desserts, diet filters, alerts for favorite foods). Everything else is settings. See `docs/strategy.md` for why.
 
 ## Tabs
 
