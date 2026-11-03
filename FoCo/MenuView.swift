@@ -10,7 +10,6 @@ struct MenuView: View {
     @State private var leftAt: Date?
     @State private var date = FoCoCalendar.startOfDay(.now)
     @State private var meal = UserDefaults.standard.string(forKey: "meal").flatMap(Meal.init) ?? .current
-    @State private var expanded: Set<String> = []
     @State private var query = ""
 
     @Environment(SocialStore.self) private var socialStore
@@ -77,6 +76,7 @@ struct MenuView: View {
                 }
             }
             .navigationDestination(for: FoodRoute.self) { FoodDetailView(route: $0) }
+            .navigationDestination(for: StationRoute.self) { StationDishesView(route: $0) }
             .tabRoot()
             .task(id: active) { if active { socialStore.noteUse(.menu) } }
         }
@@ -202,38 +202,39 @@ struct MenuView: View {
                 }
             }
 
+            // Every station slides sideways, like the desserts: its main dishes first, then See all for the rest.
             ForEach(withMains) { station in
                 Section {
-                    ForEach(station.mains) { item in
-                        NavigationLink(value: FoodRoute(item: item, date: date, meal: meal)) {
-                            FoodRow(item: item, prominent: true, showStation: false)
-                        }
-                        .watchSwipe(item.name)
-                    }
-                    if !station.more.isEmpty {
-                        moreGroup("More from \(station.name)", items: station.more, key: station.name)
-                    }
+                    DishStrip(items: station.mains, date: date, meal: meal,
+                              seeAll: station.more.isEmpty ? nil : StationRoute(name: station.name, mains: station.mains, more: station.more, date: date, meal: meal))
+                        .listRowInsets(EdgeInsets(top: 12, leading: 0, bottom: 12, trailing: 0))
                 } header: {
                     SectionTitle(station.name)
                 } footer: {
-                    if station.id == withMains.first?.id { Text("Swipe right on any dish to get an alert next time it's served.") }
+                    if station.id == withMains.first?.id { Text("Press and hold any dish to get an alert when it’s served.") }
                 }
             }
 
-            let sidesOnly = stations.filter { $0.mains.isEmpty && !$0.more.isEmpty }
-            if !sidesOnly.isEmpty {
+            // Stations with only sides and everyday items (bakery, deli…): the first few, then See all.
+            ForEach(stations.filter { $0.mains.isEmpty && !$0.more.isEmpty }) { station in
                 Section {
-                    ForEach(sidesOnly) { station in
-                        stationGroup(station.name, subtitle: preview(station.more), items: station.more)
-                    }
+                    DishStrip(items: Array(station.more.prefix(Self.stripLimit)), date: date, meal: meal,
+                              seeAll: station.more.count > Self.stripLimit ? StationRoute(name: station.name, mains: [], more: station.more, date: date, meal: meal) : nil)
+                        .listRowInsets(EdgeInsets(top: 12, leading: 0, bottom: 12, trailing: 0))
                 } header: {
-                    SectionTitle("Sides, salads, and more")
+                    SectionTitle(station.name)
                 }
             }
 
             if !saladBar.isEmpty {
                 Section {
-                    stationGroup("Salad Bar", subtitle: "Open all day · \(saladBar.count) items", items: saladBar, showStation: false)
+                    DishStrip(items: Array(saladBar.prefix(Self.stripLimit)), date: date, meal: meal,
+                              seeAll: saladBar.count > Self.stripLimit ? StationRoute(name: "Salad Bar", mains: [], more: saladBar, date: date, meal: meal) : nil)
+                        .listRowInsets(EdgeInsets(top: 12, leading: 0, bottom: 12, trailing: 0))
+                } header: {
+                    SectionTitle("Salad Bar")
+                } footer: {
+                    Text("Open all day")
                 }
             }
         } else if store.isLoading(date, meal) {
@@ -265,66 +266,8 @@ struct MenuView: View {
         }
     }
 
-    private func stationGroup(_ name: String, subtitle: String, items: [FoodItem], showStation: Bool = false) -> some View {
-        DisclosureGroup(isExpanded: binding(for: name)) {
-            ForEach(items) { item in
-                NavigationLink(value: FoodRoute(item: item, date: date, meal: meal)) {
-                    FoodRow(item: item, showStation: showStation)
-                }
-                .watchSwipe(item.name)
-            }
-        } label: {
-            VStack(alignment: .leading, spacing: 2) {
-                HStack {
-                    Text(name).font(.headline)
-                    Spacer()
-                    Text("\(items.count)")
-                        .font(.subheadline.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                        .accessibilityLabel("\(items.count) items")
-                }
-                Text(subtitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(typeSize.isAccessibilitySize ? 3 : 1)
-            }
-            .padding(.vertical, 2)
-        }
-    }
-
-    /// "More from Hearth (6)": a station's sides, sauces, and everyday items, folded away.
-    private func moreGroup(_ title: String, items: [FoodItem], key: String) -> some View {
-        DisclosureGroup(isExpanded: binding(for: "more|" + key)) {
-            ForEach(items) { item in
-                NavigationLink(value: FoodRoute(item: item, date: date, meal: meal)) {
-                    FoodRow(item: item, showStation: false)
-                }
-                .watchSwipe(item.name)
-            }
-        } label: {
-            HStack {
-                Text(title).font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
-                Spacer()
-                Text("\(items.count)")
-                    .font(.subheadline.monospacedDigit())
-                    .foregroundStyle(.tertiary)
-                    .accessibilityLabel("\(items.count) items")
-            }
-        }
-    }
-
-    private func preview(_ items: [FoodItem]) -> String {
-        let names = items.prefix(3).map(\.name)
-        let extra = items.count - names.count
-        return names.joined(separator: ", ") + (extra > 0 ? " +\(extra) more" : "")
-    }
-
-    private func binding(for station: String) -> Binding<Bool> {
-        Binding(
-            get: { expanded.contains(station) },
-            set: { if $0 { expanded.insert(station) } else { expanded.remove(station) } }
-        )
-    }
+    /// How many cards a station without main dishes shows before See all.
+    private static let stripLimit = 8
 }
 
 struct SearchResultsView: View {
@@ -483,5 +426,143 @@ private struct DessertCardFill: ShapeStyle {
         let index = seed.unicodeScalars.reduce(0) { ($0 &* 31 &+ Int($1.value)) & 0xFFFF } % Self.pairs.count
         let (a, b) = Self.pairs[index]
         return LinearGradient(colors: [b, a], startPoint: .topTrailing, endPoint: .bottomLeading)
+    }
+}
+
+/// A station's dishes for the See all page: its main dishes, then everything else.
+struct StationRoute: Hashable {
+    let name: String
+    let mains: [FoodItem]
+    let more: [FoodItem]
+    let date: Date
+    let meal: Meal
+    var count: Int { mains.count + more.count }
+}
+
+/// A station's dishes as cards you slide through sideways, like the desserts, ending in See all when there's more.
+/// Press and hold a card to get an alert when that dish is served (a sideways swipe moves the cards).
+private struct DishStrip: View {
+    let items: [FoodItem]
+    let date: Date
+    let meal: Meal
+    var seeAll: StationRoute? = nil
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(alignment: .top, spacing: 10) {
+                ForEach(items) { item in
+                    NavigationLink(value: FoodRoute(item: item, date: date, meal: meal)) {
+                        DishCard(item: item)
+                    }
+                    .buttonStyle(.plain)
+                    .watchSwipe(item.name)
+                }
+                if let seeAll {
+                    NavigationLink(value: seeAll) {
+                        SeeAllCard(count: seeAll.count)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("See all of \(seeAll.name)")
+                    .accessibilityValue("\(seeAll.count) dishes")
+                }
+            }
+            .padding(.horizontal, 16)
+            // Every card as tall as the tallest, so long names wrap instead of being cut off.
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        .noTabBarMargin()
+    }
+}
+
+private struct DishCard: View {
+    @Environment(Preferences.self) private var prefs
+    let item: FoodItem
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .center, spacing: 4) {
+                DietBadges(item: item)
+                Spacer(minLength: 0)
+                if prefs.isWatching(item.name) {
+                    Image(systemName: "bell.fill").font(.caption).foregroundStyle(.tint)
+                }
+            }
+            Spacer(minLength: 0)
+            Text(item.name)
+                .font(.headline)
+                .foregroundStyle(Color.primary)
+                .multilineTextAlignment(.leading)
+                .lineLimit(4)
+                .fixedSize(horizontal: false, vertical: true)
+            if let macros = item.macroLine {
+                Text(macros).font(.caption).foregroundStyle(.secondary)
+            }
+            if prefs.filtering && !item.hasAllergenInfo {
+                Text("Not labeled").font(.caption.weight(.medium)).foregroundStyle(.orange)
+            }
+        }
+        .padding(14)
+        .frame(width: 168, alignment: .topLeading)
+        .frame(minHeight: 132, maxHeight: .infinity, alignment: .topLeading)
+        .background(Color(uiColor: .tertiarySystemFill), in: .rect(cornerRadius: 20))
+        .contentShape(.rect(cornerRadius: 20))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(item.accessibilitySummary)
+        .accessibilityValue(prefs.isWatching(item.name) ? "Alert on" : "")
+        .accessibilityHint("Shows nutrition and allergens")
+    }
+}
+
+/// The last card in a station's row: opens every dish it has today.
+private struct SeeAllCard: View {
+    let count: Int
+
+    var body: some View {
+        VStack(spacing: 6) {
+            Image(systemName: "arrow.right.circle.fill").font(.title2)
+            Text("See all").font(.headline)
+            Text("\(count) dishes").font(.caption).foregroundStyle(.secondary)
+        }
+        .foregroundStyle(.tint)
+        .frame(width: 120)
+        .frame(minHeight: 132, maxHeight: .infinity)
+        .background(Color(uiColor: .tertiarySystemFill), in: .rect(cornerRadius: 20))
+        .contentShape(.rect(cornerRadius: 20))
+    }
+}
+
+/// Everything a station has this meal, as a list: its main dishes, then its sides and everyday items.
+/// Swipe right on a dish here (or press and hold it) to get an alert when it's served.
+struct StationDishesView: View {
+    let route: StationRoute
+
+    var body: some View {
+        List {
+            if !route.mains.isEmpty {
+                Section {
+                    ForEach(route.mains) { row($0, prominent: true) }
+                } header: {
+                    SectionTitle("Main dishes")
+                }
+            }
+            if !route.more.isEmpty {
+                Section {
+                    ForEach(route.more) { row($0, prominent: false) }
+                } header: {
+                    if !route.mains.isEmpty { SectionTitle("More from \(route.name)") }
+                } footer: {
+                    Text("Swipe right on any dish to get an alert when it’s served.")
+                }
+            }
+        }
+        .onBackdrop()
+        .navigationTitle(route.name)
+    }
+
+    private func row(_ item: FoodItem, prominent: Bool) -> some View {
+        NavigationLink(value: FoodRoute(item: item, date: route.date, meal: route.meal)) {
+            FoodRow(item: item, prominent: prominent, showStation: false)
+        }
+        .watchSwipe(item.name)
     }
 }

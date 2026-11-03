@@ -50,7 +50,7 @@ final class DesignTourTests: XCTestCase {
 
         tab("Menu"); sleep(3); snap("menu")
         app.swipeUp(); sleep(1); snap("menu-scrolled")
-        let dish = app.buttons.matching(NSPredicate(format: "label CONTAINS 'calories'")).element(boundBy: 3)
+        let dish = onScreenDish(3)
         if dish.exists {
             dish.tap(); sleep(2); snap("dish")
             app.navigationBars.buttons.element(boundBy: 0).tap(); sleep(1)
@@ -60,6 +60,14 @@ final class DesignTourTests: XCTestCase {
         app.navigationBars["Foco"].buttons["Food alerts"].tap(); sleep(2); snap("food-alerts")
         app.navigationBars.buttons.element(boundBy: 0).tap(); sleep(1)
         tab("Me"); sleep(1); snap("me")
+    }
+
+    /// The nth dish (card or row) that's on screen: cards further along a station's row aren't, until it slides.
+    private func onScreenDish(_ n: Int) -> XCUIElement {
+        let dishes = app.buttons.matching(NSPredicate(format: "label CONTAINS 'calories'"))
+        _ = dishes.firstMatch.waitForExistence(timeout: 10)
+        let visible = dishes.allElementsBoundByIndex.filter { $0.isHittable }
+        return visible.isEmpty ? dishes.firstMatch : visible[min(n, visible.count - 1)]
     }
 
     private func signUp() {
@@ -88,7 +96,7 @@ final class DesignTourTests: XCTestCase {
         sleep(1)
         app.swipeUp()
         app.switches.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
-        app.buttons["Join Foco Polo"].tap()
+        app.buttons["Join Foco"].tap()
         // Signing up ends on adding friends (it can wait).
         XCTAssertTrue(app.navigationBars["Add your friends"].waitForExistence(timeout: 8), "signing up ends on adding friends")
         sleep(1)

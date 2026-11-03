@@ -63,7 +63,7 @@ struct OnboardingView: View {
 
     private var welcome: some View {
         VStack(alignment: .leading, spacing: 20) {
-            BrandHeader(title: "Foco Polo", subtitle: "What's on at '53 Commons, and who you're eating with.")
+            BrandHeader(title: "Foco", subtitle: "What's on at '53 Commons, and who you're eating with.")
             Text("Tell us what you eat and the dishes you like. We'll filter the menu and let you know when your favorites are on.")
                 .foregroundStyle(.secondary)
         }
@@ -101,7 +101,7 @@ struct OnboardingView: View {
                     Chip(title: food, selected: prefs.isWatching(food)) { prefs.toggleWatch(food) }
                 }
             }
-            Text("You can follow any food later: tap the bell on the menu, or swipe right on a dish.")
+            Text("You can follow any food later: tap the bell on the menu, or press and hold a dish.")
                 .font(.footnote).foregroundStyle(.secondary)
         }
     }

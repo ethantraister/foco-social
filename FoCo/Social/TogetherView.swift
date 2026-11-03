@@ -250,7 +250,7 @@ private struct AddFriendsCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Add your friends").font(.headline)
-            Text("See when they're at Foco and plan meals together. Find people by name, or text friends who aren't on Foco Polo yet.")
+            Text("See when they're at Foco and plan meals together. Find people by name, or text friends who don't have the app yet.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
             HStack(spacing: 10) {
@@ -354,8 +354,8 @@ struct AutoCheckinSetting: View {
                 openURL(URL(string: UIApplication.openSettingsURLString)!)
             } label: {
                 Label(presence.isDenied
-                      ? "Location is off for Foco Polo, so this can't work. Tap to turn it on in Settings."
-                      : "Set Location to “Always” in Settings so Foco Polo can check you in when the app is closed.",
+                      ? "Location is off for this app, so this can't work. Tap to turn it on in Settings."
+                      : "Set Location to “Always” in Settings so the app can check you in when it's closed.",
                       systemImage: "location.slash")
                     .font(.subheadline)
             }
@@ -369,9 +369,7 @@ private struct ShareWithSetting: View {
     @State private var share = ShareWith.friends
 
     var body: some View {
-        Picker(selection: $share) {
-            ForEach(ShareWith.allCases) { Text($0.title).tag($0) }
-        } label: {
+        InlinePicker(selection: $share, options: ShareWith.allCases, title: \.title, name: "Who sees when I'm at Foco") {
             Label("Who sees when I'm at Foco", systemImage: "person.2.badge.gearshape").labelStyle(.tile(.indigo))
         }
         .onAppear { share = social.defaultShare }

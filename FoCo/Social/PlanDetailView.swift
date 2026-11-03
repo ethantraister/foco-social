@@ -120,7 +120,7 @@ struct PlanDetailView: View {
     private func message(about plan: Plan) -> String {
         var text = "\(plan.mealKind?.title ?? "Meal") at Foco, \(plan.timeLabel)"
         if let note = plan.note, !note.isEmpty { text += " (“\(note)”)" }
-        text += ". Tap Going on Foco Polo if you're in."
+        text += ". Tap Going in the Foco app if you're in."
         if let link = AppInvite.link { text += "\n\n\(link.absoluteString)" }
         return text
     }

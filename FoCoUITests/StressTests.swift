@@ -50,7 +50,7 @@ final class StressTests: XCTestCase {
         // Open a screen on top, go back with the edge swipe, and swipe straight away.
         app.buttons["tab.Menu"].tap()
         for i in 0..<4 {
-            let dish = app.buttons.matching(NSPredicate(format: "label CONTAINS 'calories'")).element(boundBy: 2 + i)
+            let dish = onScreenDish(2 + i)
             guard dish.waitForExistence(timeout: 5) else { break }
             dish.tap()
             swipeBack()
@@ -88,6 +88,14 @@ final class StressTests: XCTestCase {
     }
 
     /// The system's back gesture: from the screen's left edge.
+    /// The nth dish (card or row) that's on screen: cards further along a station's row aren't, until it slides.
+    private func onScreenDish(_ n: Int) -> XCUIElement {
+        let dishes = app.buttons.matching(NSPredicate(format: "label CONTAINS 'calories'"))
+        _ = dishes.firstMatch.waitForExistence(timeout: 10)
+        let visible = dishes.allElementsBoundByIndex.filter { $0.isHittable }
+        return visible.isEmpty ? dishes.firstMatch : visible[min(n, visible.count - 1)]
+    }
+
     private func swipeBack() {
         let edge = app.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.5))
         edge.press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)))
@@ -133,7 +141,7 @@ final class StressTests: XCTestCase {
         sleep(1)
         app.swipeUp()
         app.switches.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
-        app.buttons["Join Foco Polo"].tap()
+        app.buttons["Join Foco"].tap()
         // Signing up ends on adding friends (it can wait).
         XCTAssertTrue(app.navigationBars["Add your friends"].waitForExistence(timeout: 8), "signing up ends on adding friends")
         app.navigationBars.buttons.matching(NSPredicate(format: "label IN {'Later', 'Done'}")).firstMatch.tap()

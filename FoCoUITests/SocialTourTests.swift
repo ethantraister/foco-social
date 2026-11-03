@@ -115,7 +115,7 @@ final class SocialTourTests: XCTestCase {
         let agree = app.switches.firstMatch
         agree.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
         snap("profile-setup")
-        app.buttons["Join Foco Polo"].tap()
+        app.buttons["Join Foco"].tap()
         // Signing up ends on adding friends (it can wait).
         XCTAssertTrue(app.navigationBars["Add your friends"].waitForExistence(timeout: 8), "signing up ends on adding friends")
         XCTAssertTrue(app.searchFields["Find people by name"].exists, "with search by name")
@@ -477,7 +477,7 @@ final class SocialTourTests: XCTestCase {
         sleep(1)
         app.swipeUp()
         app.switches.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
-        app.buttons["Join Foco Polo"].tap()
+        app.buttons["Join Foco"].tap()
         // Signing up ends on adding friends (it can wait).
         XCTAssertTrue(app.navigationBars["Add your friends"].waitForExistence(timeout: 8), "signing up ends on adding friends")
         app.navigationBars.buttons.matching(NSPredicate(format: "label IN {'Later', 'Done'}")).firstMatch.tap()
@@ -510,7 +510,7 @@ final class SocialTourTests: XCTestCase {
             sleep(1)
             app.swipeUp()
             app.switches.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
-            app.buttons["Join Foco Polo"].tap()
+            app.buttons["Join Foco"].tap()
             // Signing up ends on adding friends (it can wait).
             if app.navigationBars["Add your friends"].waitForExistence(timeout: 8) {
                 app.navigationBars.buttons.matching(NSPredicate(format: "label IN {'Later', 'Done'}")).firstMatch.tap()

@@ -1,4 +1,4 @@
-// Foco Polo: sends push notifications through Apple (APNs).
+// Foco app: sends push notifications through Apple (APNs).
 // The database queues each notification in push_queue and calls this function with its id
 // (see deliver_push() in backend/migrations/010_social_v2.sql). Each one is sent once: the first call
 // stamps sent_at, so calling again with the same id does nothing.

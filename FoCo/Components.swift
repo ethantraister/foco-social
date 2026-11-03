@@ -200,3 +200,35 @@ struct Chip: View {
 enum Suggestions {
     static let foods = ["Steak", "Sushi", "Chicken Tenders", "Pad Thai", "Salmon", "Mac & Cheese", "Pancakes", "Burrito", "Stir Fry", "Quesadilla", "Meatballs", "Waffles"]
 }
+
+/// A choice in a settings list with its current value on the right, on the same line as its name. (A form's own
+/// menu picker moves the value under a name that's too long to share the line, like "Friends getting to Foco".)
+struct InlinePicker<Value: Hashable, RowLabel: View>: View {
+    @Binding var selection: Value
+    let options: [Value]
+    let title: (Value) -> String
+    /// What the row is, for VoiceOver ("Friends going soon").
+    let name: String
+    @ViewBuilder var label: () -> RowLabel
+
+    var body: some View {
+        HStack(spacing: 12) {
+            label()
+            Spacer(minLength: 8)
+            Menu {
+                Picker(name, selection: $selection) {
+                    ForEach(options, id: \.self) { Text(title($0)).tag($0) }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Text(title(selection))
+                    Image(systemName: "chevron.up.chevron.down").font(.footnote.weight(.semibold))
+                }
+                .foregroundStyle(.tint)
+                .fixedSize()
+            }
+            .accessibilityLabel(name)
+            .accessibilityValue(title(selection))
+        }
+    }
+}

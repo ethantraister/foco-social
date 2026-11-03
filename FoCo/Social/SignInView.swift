@@ -57,7 +57,7 @@ private struct ProfileLoadingView: View {
         Group {
             if social.loadFailed {
                 ContentUnavailableView {
-                    Label("Can't reach Foco Polo", systemImage: "wifi.exclamationmark")
+                    Label("Can't connect", systemImage: "wifi.exclamationmark")
                 } description: {
                     Text("Check your connection and try again.")
                 } actions: {
@@ -265,7 +265,7 @@ struct ProfileSetupView: View {
                     }
                 } label: {
                     ZStack {
-                        Text("Join Foco Polo").font(.headline).opacity(working ? 0 : 1)
+                        Text("Join Foco").font(.headline).opacity(working ? 0 : 1)
                         if working { ProgressView() }
                     }
                     .frame(maxWidth: .infinity, minHeight: 44)

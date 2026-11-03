@@ -37,7 +37,7 @@ final class TourTests: XCTestCase {
         app.launchArguments = ["-resetForUITests", "-meal", "dinner"]
         app.launch()
 
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Foco Polo")).firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Foco")).firstMatch.waitForExistence(timeout: 5))
         snap("onboarding-welcome")
         app.buttons["Continue"].tap()
         sleep(1)
@@ -60,12 +60,14 @@ final class TourTests: XCTestCase {
         sleep(4)
         snap("menu-dinner")
 
+        // Every station slides sideways; press and hold a dish for an alert.
         let dish = button("Meatloaf")
         if dish.waitForExistence(timeout: 3) {
-            dish.swipeRight()
-            sleep(1)
-            snap("swipe-to-alert")
-            app.buttons["Alert me"].firstMatch.tap()
+            dish.press(forDuration: 1.2)
+            let alertMe = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Alert me when'")).firstMatch
+            XCTAssertTrue(alertMe.waitForExistence(timeout: 3), "press and hold offers an alert")
+            snap("hold-to-alert")
+            alertMe.tap()
             sleep(1)
             dish.tap()
             sleep(1)
@@ -77,11 +79,24 @@ final class TourTests: XCTestCase {
         sleep(1)
         snap("menu-stations")
 
-        let salad = button("Salad Bar")
+        // The last card of a long row opens the station's full list.
+        let salad = button("See all of Salad Bar")
+        for _ in 0..<6 where !(salad.exists && salad.frame.midY < app.frame.height * 0.75) { app.swipeUp(); sleep(1) }
         if salad.waitForExistence(timeout: 2) {
+            // Slide that row along (a sideways drag on it moves the cards, not the tabs) until See all shows.
+            let row = salad.frame.midY / app.frame.height
+            for _ in 0..<4 where !salad.isHittable {
+                app.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: row))
+                    .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: row)))
+                sleep(1)
+            }
+            XCTAssertTrue(app.buttons["tab.Menu"].isSelected, "sliding a row of dishes doesn't change tabs")
             salad.tap()
+            XCTAssertTrue(app.navigationBars["Salad Bar"].waitForExistence(timeout: 3), "See all opens the station's full list")
             sleep(1)
             snap("menu-saladbar")
+            app.navigationBars.buttons.element(boundBy: 0).tap()
+            sleep(1)
         }
 
         // Food alerts live behind the bell on the menu: the dish just followed is there.

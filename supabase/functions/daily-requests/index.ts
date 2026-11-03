@@ -1,4 +1,4 @@
-// Foco Polo: once a day, email Dartmouth Dining every food request students sent in the app.
+// Foco app: once a day, email Dartmouth Dining every food request students sent in the app.
 // Called by a pg_cron job (see backend/migrations/003_daily_requests_cron.sql).
 //
 // Secrets (Supabase → Edge Functions → Secrets):
@@ -25,8 +25,8 @@ function escape(s: string) {
 function compose(rows: Row[], day: string) {
   const total = rows.reduce((n, r) => n + r.ids.length, 0);
   const subject = `Foco food requests from students, ${day} (${total} request${total === 1 ? "" : "s"})`;
-  const intro = `Here's what students asked '53 Commons to serve, collected through the Foco Polo app since the last email. Each line counts students, not names.`;
-  const footer = `Sent automatically once a day by Foco Polo. Reply to this email to reach the person who runs it.`;
+  const intro = `Here's what students asked '53 Commons to serve, collected through the Foco app since the last email. Each line counts students, not names.`;
+  const footer = `Sent automatically once a day by the Foco app. Reply to this email to reach the person who runs it.`;
 
   const lines = rows.map((r, i) => {
     const meals = Object.entries(r.meals ?? {}).sort((a, b) => b[1] - a[1]).map(([m, n]) => `${mealNames[m] ?? m} ×${n}`).join(", ");
@@ -67,7 +67,7 @@ Deno.serve(async (req) => {
     auth: { user, pass: Deno.env.get("GMAIL_APP_PASSWORD")! },
   });
   const to = Deno.env.get("DIGEST_TO") || user;
-  await transport.sendMail({ from: `"Foco Polo" <${user}>`, to, subject: email.subject, text: email.text, html: email.html });
+  await transport.sendMail({ from: `"Foco app" <${user}>`, to, subject: email.subject, text: email.text, html: email.html });
 
   const ids = rows.flatMap((r) => r.ids);
   const { error: markError } = await db.from("food_requests").update({ sent_at: new Date().toISOString() }).in("id", ids);

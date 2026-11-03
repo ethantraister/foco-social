@@ -1,4 +1,4 @@
-# Foco Polo (v2)
+# Foco (v2)
 
 See which friends are at Foco, and what's on. Two things, done well: **Together** (who's there, who's going soon and to which side, plans for later) and the **Menu** (what's on, desserts, diet filters, alerts for favorite foods). Everything else is settings. See `docs/strategy.md` for why. v1 (menu only) lives in `~/FoCoApp`. The two apps have different bundle IDs, so both can be installed side by side.
 

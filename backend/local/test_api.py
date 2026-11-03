@@ -1,4 +1,4 @@
-"""End-to-end checks of the Foco Polo API and its privacy rules, run against dev_server.py.
+"""End-to-end checks of the Foco app API and its privacy rules, run against dev_server.py.
 
     ~/FoCoSocial-devtools/venv/bin/python backend/local/test_api.py
 """

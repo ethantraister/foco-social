@@ -62,7 +62,7 @@ final class PagerTests: XCTestCase {
         XCTAssertTrue(waitSelected("Menu"))
 
         // On a dish (pushed on top of Menu), a sideways swipe isn't a tab change.
-        let dish = app.buttons.matching(NSPredicate(format: "label CONTAINS 'calories'")).element(boundBy: 2)
+        let dish = onScreenDish(2)
         XCTAssertTrue(dish.waitForExistence(timeout: 10), "menu loaded")
         dish.tap()
         let back = app.navigationBars.buttons.element(boundBy: 0)
@@ -82,9 +82,8 @@ final class PagerTests: XCTestCase {
     func testSwipeBackFromAPushedScreen() {
         XCTAssertTrue(app.buttons["tab.Menu"].waitForExistence(timeout: 5))
         app.buttons["tab.Menu"].tap()
-        let dishes = app.buttons.matching(NSPredicate(format: "label CONTAINS 'calories'"))
         for (i, fromEdge) in [true, false].enumerated() {
-            let dish = dishes.element(boundBy: 2 + i)
+            let dish = onScreenDish(2 + i)
             XCTAssertTrue(dish.waitForExistence(timeout: 10), "menu loaded")
             dish.tap()
             XCTAssertTrue(app.switches.firstMatch.waitForExistence(timeout: 3), "the dish opened")
@@ -136,30 +135,53 @@ final class PagerTests: XCTestCase {
 
         app.buttons["tab.Menu"].tap()
         XCTAssertTrue(waitSelected("Menu"))
-        // A full-width dish row, not one of the dessert cards (those sit in a row that slides on its own).
+        // A row of dish cards slides on its own instead of changing tabs.
         let dishes = app.buttons.matching(NSPredicate(format: "label CONTAINS 'calories'"))
         XCTAssertTrue(dishes.firstMatch.waitForExistence(timeout: 10))
-        for _ in 0..<3 where !dishes.allElementsBoundByIndex.contains(where: { $0.frame.width > 300 && $0.isHittable }) {
+        let midScreen = { (e: XCUIElement) in e.isHittable && e.frame.midY > self.app.frame.height * 0.3 && e.frame.midY < self.app.frame.height * 0.75 }
+        for _ in 0..<3 where !dishes.allElementsBoundByIndex.contains(where: midScreen) { app.swipeUp(); sleep(1) }
+        guard let card = dishes.allElementsBoundByIndex.first(where: midScreen) else { return XCTFail("no dish card on screen") }
+        let row = card.frame.midY / app.frame.height
+        swipe(left: true, y: row)
+        snap("dish-row-slid")
+        XCTAssertTrue(selected("Menu"), "the cards slid; the tab stayed")
+
+        // A station's full list (See all, at the end of its row): rows there slide open for an alert.
+        let seeAll = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'See all of'")).firstMatch
+        for _ in 0..<6 where !(seeAll.exists && seeAll.frame.midY > app.frame.height * 0.25 && seeAll.frame.midY < app.frame.height * 0.75) {
             app.swipeUp(); sleep(1)
         }
-        guard let dish = dishes.allElementsBoundByIndex.first(where: { $0.frame.width > 300 && $0.isHittable }) else {
-            return XCTFail("no dish row on screen")
+        XCTAssertTrue(seeAll.exists, "a station with more dishes than its row shows")
+        let seeAllRow = seeAll.frame.midY / app.frame.height
+        // Slide the row at an easy pace, and let it stop: a tap on a row that's still coasting only stops it.
+        for _ in 0..<5 where !seeAll.isHittable {
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: seeAllRow))
+                .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.15, dy: seeAllRow)))
+            sleep(2)
         }
+        XCTAssertTrue(selected("Menu"))
+        snap("see-all-card")
+        let station = String(seeAll.label.dropFirst("See all of ".count))
+        seeAll.tap()
+        XCTAssertTrue(app.navigationBars[station].waitForExistence(timeout: 5), "See all opens \(station)'s list")
+        sleep(1)
+        // Every dish reads "<name>, <station> station, …" (not every one lists calories).
+        let rows = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", " station"))
+        let row2 = rows.allElementsBoundByIndex.first { $0.isHittable && $0.frame.width > 300 }
+        XCTAssertNotNil(row2, "the station's dishes as a list")
+        guard let dish = row2 else { return }
         dish.swipeRight()
         XCTAssertTrue(app.buttons["Alert me"].waitForExistence(timeout: 3), "the dish row slid open")
         snap("dish-row-open")
-        XCTAssertTrue(selected("Menu"))
-        app.navigationBars["Foco"].tap()
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(app.navigationBars["Foco"].waitForExistence(timeout: 3), "back on the menu")
         sleep(1)
-        // iOS 26 leaves the row open after a tap elsewhere; swiping it back closes it.
-        if app.buttons["Alert me"].exists && app.buttons["Alert me"].isHittable { dish.swipeLeft(); sleep(1) }
-        snap("dish-row-closed")
 
-        // A row with nothing on that side lets the pages move: swiping left across a dish goes to Together.
-        let y = dish.frame.midY / app.frame.height
-        swipe(left: true, y: y)
-        snap("after-dish-swipe-left")
-        XCTAssertTrue(waitSelected("Together"), "a dish has no button on its right, so the swipe changes tabs")
+        // Where nothing slides on its own (the title), a sideways swipe changes tabs.
+        let title = app.navigationBars["Foco"].frame.midY / app.frame.height
+        swipe(left: true, y: title)
+        snap("after-title-swipe-left")
+        XCTAssertTrue(waitSelected("Together"), "swiping across the title changes tabs")
     }
 
     private func signUp() {
@@ -183,7 +205,7 @@ final class PagerTests: XCTestCase {
         sleep(1)
         app.swipeUp()
         app.switches.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
-        app.buttons["Join Foco Polo"].tap()
+        app.buttons["Join Foco"].tap()
         // Signing up ends on adding friends (it can wait).
         XCTAssertTrue(app.navigationBars["Add your friends"].waitForExistence(timeout: 8), "signing up ends on adding friends")
         app.navigationBars.buttons.matching(NSPredicate(format: "label IN {'Later', 'Done'}")).firstMatch.tap()
@@ -227,6 +249,15 @@ final class PagerTests: XCTestCase {
         // A plain tap still works.
         menu.tap()
         XCTAssertTrue(waitSelected("Menu"))
+    }
+
+
+    /// The nth dish (card or row) that's on screen: cards further along a station's row aren't, until it slides.
+    private func onScreenDish(_ n: Int) -> XCUIElement {
+        let dishes = app.buttons.matching(NSPredicate(format: "label CONTAINS 'calories'"))
+        _ = dishes.firstMatch.waitForExistence(timeout: 10)
+        let visible = dishes.allElementsBoundByIndex.filter { $0.isHittable }
+        return visible.isEmpty ? dishes.firstMatch : visible[min(n, visible.count - 1)]
     }
 
     private func selected(_ tab: String) -> Bool { app.buttons["tab.\(tab)"].isSelected }
